@@ -1,0 +1,389 @@
+{
+  "realm": "openinsight",
+  "enabled": true,
+  "displayName": "OpenInsight",
+  "displayNameHtml": "<b>OpenInsight</b>",
+  "loginWithEmailAllowed": true,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "refreshTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespan": 5184000,
+  "bruteForceProtected": true,
+  "maxFailureWaitSeconds": 900,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(12) and upperCase(1) and digits(1) and specialChars(1) and passwordHistory(5)",
+  "defaultRoles": ["viewer"],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Full platform access, user management",
+        "composite": false
+      },
+      {
+        "name": "data-analyst",
+        "description": "Query access, dashboard creation, SQL Lab",
+        "composite": false
+      },
+      {
+        "name": "viewer",
+        "description": "Dashboard viewing only, no SQL Lab, no data export",
+        "composite": false
+      },
+      {
+        "name": "data-engineer",
+        "description": "Pipeline management, dbt, Airflow access",
+        "composite": false
+      }
+    ],
+    "client": {
+      "superset": [
+        {
+          "name": "superset-admin",
+          "description": "Superset Admin role"
+        },
+        {
+          "name": "superset-alpha",
+          "description": "Superset Alpha role (SQL Lab + dashboard creation)"
+        },
+        {
+          "name": "superset-gamma",
+          "description": "Superset Gamma role (dashboard viewers)"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "Finance",
+      "path": "/Finance",
+      "realmRoles": ["data-analyst"]
+    },
+    {
+      "name": "HR",
+      "path": "/HR",
+      "realmRoles": ["data-analyst"]
+    },
+    {
+      "name": "Engineering",
+      "path": "/Engineering",
+      "realmRoles": ["data-engineer", "data-analyst"]
+    },
+    {
+      "name": "Executive",
+      "path": "/Executive",
+      "realmRoles": ["admin"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "superset",
+      "name": "Apache Superset",
+      "description": "OpenInsight visualization layer",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "superset-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "rootUrl": "http://localhost:8088",
+      "baseUrl": "/",
+      "redirectUris": ["http://localhost:8088/*"],
+      "webOrigins": ["http://localhost:8088"],
+      "defaultClientScopes": ["openid", "email", "profile", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "client_roles",
+            "userinfo.token.claim": "true",
+            "usermodel.clientRoleMapping.clientId": "superset"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "cube",
+      "name": "Cube Semantic Layer",
+      "description": "OpenInsight semantic layer and caching",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "cube-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "rootUrl": "http://localhost:4000",
+      "baseUrl": "/",
+      "redirectUris": ["http://localhost:4000/*"],
+      "webOrigins": ["http://localhost:4000"],
+      "defaultClientScopes": ["openid", "email", "profile", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "openinsight-api",
+      "name": "OpenInsight API",
+      "description": "General API client for backend services",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "api-dev-secret",
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "email", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@openinsight.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123!Dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "superset": ["superset-admin"]
+      }
+    },
+    {
+      "username": "alice.finance",
+      "email": "alice@openinsight.local",
+      "firstName": "Alice",
+      "lastName": "Finance",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123!Dev",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Finance"],
+      "clientRoles": {
+        "superset": ["superset-alpha"]
+      }
+    },
+    {
+      "username": "bob.hr",
+      "email": "bob@openinsight.local",
+      "firstName": "Bob",
+      "lastName": "HR",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123!Dev",
+          "temporary": false
+        }
+      ],
+      "groups": ["/HR"],
+      "clientRoles": {
+        "superset": ["superset-alpha"]
+      }
+    },
+    {
+      "username": "carol.engineering",
+      "email": "carol@openinsight.local",
+      "firstName": "Carol",
+      "lastName": "Engineering",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123!Dev",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Engineering"],
+      "clientRoles": {
+        "superset": ["superset-alpha"]
+      }
+    },
+    {
+      "username": "dave.executive",
+      "email": "dave@openinsight.local",
+      "firstName": "Dave",
+      "lastName": "Executive",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123!Dev",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Executive"],
+      "clientRoles": {
+        "superset": ["superset-admin"]
+      }
+    },
+    {
+      "username": "eve.viewer",
+      "email": "eve@openinsight.local",
+      "firstName": "Eve",
+      "lastName": "Viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123!Dev",
+          "temporary": false
+        }
+      ],
+      "groups": ["/Finance"],
+      "realmRoles": ["viewer"],
+      "clientRoles": {
+        "superset": ["superset-gamma"]
+      }
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "roles",
+      "description": "OpenID Connect scope for roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Your roles"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "smtpServer": {},
+  "internationalizationEnabled": false,
+  "supportedLocales": [],
+  "defaultLocale": "en",
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}

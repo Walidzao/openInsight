@@ -1,0 +1,57 @@
+# Environment & Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Docker volumes / local data
+data/
+volumes/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+.npm/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# dbt
+target/
+dbt_packages/
+logs/
+dbt_modules/
+
+# Cube
+.cubestore/
+
+# Airflow
+airflow/logs/
+
+# Build artifacts
+*.docx
+dist/
+build/
