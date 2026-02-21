@@ -54,12 +54,20 @@ Enterprise-grade BI platform built on open-source components.
 
 | Username | Password | Group | Role |
 |---|---|---|---|
-| admin | admin123!Dev | — | Platform admin |
-| alice.finance | test123!Dev | Finance | Data analyst |
-| bob.hr | test123!Dev | HR | Data analyst |
-| carol.engineering | test123!Dev | Engineering | Data engineer |
-| dave.executive | test123!Dev | Executive | Admin |
-| eve.viewer | test123!Dev | Finance | Viewer only |
+| admin | Admin123!DevOps | — | Platform admin |
+| alice.finance | Test123!DevOps | Finance | Data analyst |
+| bob.hr | Test123!DevOps | HR | Data analyst |
+| carol.engineering | Test123!DevOps | Engineering | Data engineer |
+| dave.executive | Test123!DevOps | Executive | Admin |
+| eve.viewer | Test123!DevOps | Finance | Viewer only |
+
+### Keycloak Admin Console
+
+Keycloak is the central identity provider for all OpenInsight applications. Manage users, roles, groups, and OIDC clients at:
+
+- **URL:** `http://localhost:8080/admin`
+- **Credentials:** admin / admin
+- **Realm:** Select `openinsight` from the top-left dropdown
 
 ### Architecture
 

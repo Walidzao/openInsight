@@ -10,7 +10,6 @@
   "verifyEmail": false,
   "sslRequired": "none",
   "accessTokenLifespan": 300,
-  "refreshTokenLifespan": 1800,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "accessCodeLifespan": 60,
@@ -23,7 +22,6 @@
   "waitIncrementSeconds": 60,
   "maxDeltaTimeSeconds": 43200,
   "passwordPolicy": "length(12) and upperCase(1) and digits(1) and specialChars(1) and passwordHistory(5)",
-  "defaultRoles": ["viewer"],
   "roles": {
     "realm": [
       {
@@ -104,8 +102,6 @@
       "baseUrl": "/",
       "redirectUris": ["http://localhost:8088/*"],
       "webOrigins": ["http://localhost:8088"],
-      "defaultClientScopes": ["openid", "email", "profile", "roles"],
-      "optionalClientScopes": ["offline_access"],
       "protocolMappers": [
         {
           "name": "groups",
@@ -163,8 +159,6 @@
       "baseUrl": "/",
       "redirectUris": ["http://localhost:4000/*"],
       "webOrigins": ["http://localhost:4000"],
-      "defaultClientScopes": ["openid", "email", "profile", "roles"],
-      "optionalClientScopes": ["offline_access"],
       "protocolMappers": [
         {
           "name": "groups",
@@ -206,7 +200,6 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "authorizationServicesEnabled": false,
-      "defaultClientScopes": ["openid", "email", "profile", "roles"],
       "protocolMappers": [
         {
           "name": "groups",
@@ -246,7 +239,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "admin123!Dev",
+          "value": "Admin123!DevOps",
           "temporary": false
         }
       ],
@@ -265,7 +258,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test123!Dev",
+          "value": "Test123!DevOps",
           "temporary": false
         }
       ],
@@ -284,7 +277,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test123!Dev",
+          "value": "Test123!DevOps",
           "temporary": false
         }
       ],
@@ -303,7 +296,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test123!Dev",
+          "value": "Test123!DevOps",
           "temporary": false
         }
       ],
@@ -322,7 +315,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test123!Dev",
+          "value": "Test123!DevOps",
           "temporary": false
         }
       ],
@@ -341,7 +334,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test123!Dev",
+          "value": "Test123!DevOps",
           "temporary": false
         }
       ],
