@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OpenInsight Sample Pipeline: PostgreSQL Customers → Redpanda
+
+  Demonstrates the core data flow pattern:
+    Source (PostgreSQL) → Transform (add metadata) → Sink (Kafka/Redpanda)
+
+  This pipeline reads the customers dimension table from PostgreSQL,
+  adds source metadata fields, and publishes to the ingest.raw.dimensions
+  topic on Redpanda for downstream consumption by ClickHouse Kafka Engine.
+
+  Prerequisites:
+    - PostgreSQL running with seed data loaded (./scripts/seed.sh)
+    - Redpanda running with topics initialized (./scripts/init-redpanda.sh)
+    - Hop environment variables set (local-dev.json)
+-->
+<pipeline>
+  <info>
+    <name>sample-ingest-to-kafka</name>
+    <description>Read customers from PostgreSQL, enrich with metadata, publish to Redpanda</description>
+    <extended_description>
+      Demonstrates the OpenInsight ingestion pattern:
+      1. Table Input: Read from PostgreSQL customers table
+      2. Add constants: Tag with source system and timestamp
+      3. JSON output: Serialize to JSON for Kafka
+
+      Variables used (from local-dev.json environment):
+        ${PG_HOST}, ${PG_PORT}, ${PG_USER}, ${PG_PASS}, ${PG_DB}
+        ${KAFKA_BOOTSTRAP}, ${KAFKA_TOPIC_DIMENSIONS}
+    </extended_description>
+    <pipeline_version/>
+    <pipeline_type>Normal</pipeline_type>
+    <parameters>
+    </parameters>
+    <capture_transform_performance>N</capture_transform_performance>
+    <transform_performance_capturing_delay>1000</transform_performance_capturing_delay>
+    <transform_performance_capturing_size_limit>100</transform_performance_capturing_size_limit>
+    <created_user>openinsight</created_user>
+    <created_date>2026-02-22 00:00:00.000</created_date>
+    <modified_user>openinsight</modified_user>
+    <modified_date>2026-02-22 00:00:00.000</modified_date>
+  </info>
+  <notepads>
+    <notepad>
+      <backgroundcolorblue>210</backgroundcolorblue>
+      <backgroundcolorgreen>230</backgroundcolorgreen>
+      <backgroundcolorred>230</backgroundcolorred>
+      <bordercolorblue>150</bordercolorblue>
+      <bordercolorgreen>150</bordercolorgreen>
+      <bordercolorred>150</bordercolorred>
+      <fontcolorblue>0</fontcolorblue>
+      <fontcolorgreen>0</fontcolorgreen>
+      <fontcolorred>0</fontcolorred>
+      <fontname>Noto Sans</fontname>
+      <fontsize>11</fontsize>
+      <fontbold>N</fontbold>
+      <fontitalic>N</fontitalic>
+      <height>50</height>
+      <width>400</width>
+      <xloc>50</xloc>
+      <yloc>30</yloc>
+      <note>OpenInsight Sample: PostgreSQL Customers → Redpanda
+Reads dimension data and publishes to ingest.raw.dimensions topic</note>
+    </notepad>
+  </notepads>
+  <order>
+    <hop>
+      <from>Read Customers</from>
+      <to>Add Metadata</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Add Metadata</from>
+      <to>Select Fields</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Select Fields</from>
+      <to>Write to Log</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <transform>
+    <name>Read Customers</name>
+    <type>TableInput</type>
+    <description>Read customer dimension from PostgreSQL</description>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+    </partitioning>
+    <connection/>
+    <sql>SELECT
+  c.id AS customer_id,
+  c.name AS customer_name,
+  c.email,
+  r.code AS region_code,
+  r.name AS region_name,
+  d.code AS department_code,
+  d.name AS department_name,
+  c.tier,
+  c.created_at
+FROM customers c
+LEFT JOIN regions r ON c.region_id = r.id
+LEFT JOIN departments d ON c.department_id = d.id
+ORDER BY c.id</sql>
+    <limit>0</limit>
+    <lookup/>
+    <execute_each_row>N</execute_each_row>
+    <variables_active>Y</variables_active>
+    <lazy_conversion_active>N</lazy_conversion_active>
+    <attributes/>
+    <GUI>
+      <xloc>150</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Add Metadata</name>
+    <type>Constant</type>
+    <description>Add source system metadata for lineage tracking</description>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+    </partitioning>
+    <fields>
+      <field>
+        <currency/>
+        <decimal/>
+        <set_empty_string>N</set_empty_string>
+        <format/>
+        <length>-1</length>
+        <name>source_system</name>
+        <precision>-1</precision>
+        <type>String</type>
+        <group/>
+        <nullif>postgresql.openinsight.customers</nullif>
+      </field>
+      <field>
+        <currency/>
+        <decimal/>
+        <set_empty_string>N</set_empty_string>
+        <format>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</format>
+        <length>-1</length>
+        <name>ingested_at</name>
+        <precision>-1</precision>
+        <type>Timestamp</type>
+        <group/>
+        <nullif>NOW</nullif>
+      </field>
+      <field>
+        <currency/>
+        <decimal/>
+        <set_empty_string>N</set_empty_string>
+        <format/>
+        <length>-1</length>
+        <name>pipeline_name</name>
+        <precision>-1</precision>
+        <type>String</type>
+        <group/>
+        <nullif>sample-ingest-to-kafka</nullif>
+      </field>
+    </fields>
+    <attributes/>
+    <GUI>
+      <xloc>400</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Select Fields</name>
+    <type>SelectValues</type>
+    <description>Reorder and rename fields for clean output</description>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+    </partitioning>
+    <fields>
+      <field>
+        <name>customer_id</name>
+      </field>
+      <field>
+        <name>customer_name</name>
+      </field>
+      <field>
+        <name>email</name>
+      </field>
+      <field>
+        <name>region_code</name>
+      </field>
+      <field>
+        <name>region_name</name>
+      </field>
+      <field>
+        <name>department_code</name>
+      </field>
+      <field>
+        <name>department_name</name>
+      </field>
+      <field>
+        <name>tier</name>
+      </field>
+      <field>
+        <name>created_at</name>
+      </field>
+      <field>
+        <name>source_system</name>
+      </field>
+      <field>
+        <name>ingested_at</name>
+      </field>
+      <field>
+        <name>pipeline_name</name>
+      </field>
+    </fields>
+    <select_unspecified>N</select_unspecified>
+    <attributes/>
+    <GUI>
+      <xloc>650</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Write to Log</name>
+    <type>WriteToLog</type>
+    <description>Log output for verification (replace with Kafka Producer in production)</description>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+    </partitioning>
+    <loglevel>log_level_basic</loglevel>
+    <displayHeader>Y</displayHeader>
+    <limitRows>N</limitRows>
+    <limitRowsNumber>0</limitRowsNumber>
+    <logmessage>Customer dimension record</logmessage>
+    <fields>
+      <field>
+        <name>customer_id</name>
+      </field>
+      <field>
+        <name>customer_name</name>
+      </field>
+      <field>
+        <name>region_code</name>
+      </field>
+      <field>
+        <name>department_code</name>
+      </field>
+      <field>
+        <name>tier</name>
+      </field>
+      <field>
+        <name>source_system</name>
+      </field>
+    </fields>
+    <attributes/>
+    <GUI>
+      <xloc>900</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+</pipeline>

@@ -59,6 +59,34 @@
           "name": "superset-gamma",
           "description": "Superset Gamma role (dashboard viewers)"
         }
+      ],
+      "cube": [
+        {
+          "name": "cube-admin",
+          "description": "Full Cube access, manage pre-aggregations, schema changes"
+        },
+        {
+          "name": "cube-query",
+          "description": "Query the Cube API (read-only)"
+        },
+        {
+          "name": "cube-export",
+          "description": "Export and download data from Cube"
+        }
+      ],
+      "airflow": [
+        {
+          "name": "airflow-admin",
+          "description": "Full Airflow access, manage DAGs, connections, variables"
+        },
+        {
+          "name": "airflow-viewer",
+          "description": "View DAGs, logs, run history (no trigger/edit)"
+        },
+        {
+          "name": "airflow-trigger",
+          "description": "Trigger DAG runs (but not modify DAGs)"
+        }
       ]
     }
   },
@@ -183,6 +211,76 @@
             "claim.name": "roles",
             "userinfo.token.claim": "true"
           }
+        },
+        {
+          "name": "client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "client_roles",
+            "userinfo.token.claim": "true",
+            "usermodel.clientRoleMapping.clientId": "cube"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "airflow",
+      "name": "Apache Airflow",
+      "description": "OpenInsight orchestration layer",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "airflow-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "rootUrl": "http://localhost:8081",
+      "baseUrl": "/",
+      "redirectUris": ["http://localhost:8081/*"],
+      "webOrigins": ["http://localhost:8081"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "client_roles",
+            "userinfo.token.claim": "true",
+            "usermodel.clientRoleMapping.clientId": "airflow"
+          }
         }
       ]
     },
@@ -245,7 +343,9 @@
       ],
       "realmRoles": ["admin"],
       "clientRoles": {
-        "superset": ["superset-admin"]
+        "superset": ["superset-admin"],
+        "cube": ["cube-admin"],
+        "airflow": ["airflow-admin"]
       }
     },
     {
@@ -264,7 +364,8 @@
       ],
       "groups": ["/Finance"],
       "clientRoles": {
-        "superset": ["superset-alpha"]
+        "superset": ["superset-alpha"],
+        "cube": ["cube-query"]
       }
     },
     {
@@ -283,7 +384,8 @@
       ],
       "groups": ["/HR"],
       "clientRoles": {
-        "superset": ["superset-alpha"]
+        "superset": ["superset-alpha"],
+        "cube": ["cube-query"]
       }
     },
     {
@@ -302,7 +404,9 @@
       ],
       "groups": ["/Engineering"],
       "clientRoles": {
-        "superset": ["superset-alpha"]
+        "superset": ["superset-alpha"],
+        "cube": ["cube-admin"],
+        "airflow": ["airflow-trigger"]
       }
     },
     {
@@ -321,7 +425,9 @@
       ],
       "groups": ["/Executive"],
       "clientRoles": {
-        "superset": ["superset-admin"]
+        "superset": ["superset-admin"],
+        "cube": ["cube-admin"],
+        "airflow": ["airflow-viewer"]
       }
     },
     {
@@ -341,7 +447,8 @@
       "groups": ["/Finance"],
       "realmRoles": ["viewer"],
       "clientRoles": {
-        "superset": ["superset-gamma"]
+        "superset": ["superset-gamma"],
+        "cube": ["cube-query"]
       }
     }
   ],

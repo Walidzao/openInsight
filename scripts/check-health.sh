@@ -53,6 +53,15 @@ check_service "Redpanda (:19092)" \
 check_service "Redpanda Console (:${REDPANDA_CONSOLE_PORT:-8888})" \
     "curl -sf http://localhost:${REDPANDA_CONSOLE_PORT:-8888}/"
 
+# --- Pipeline profile services (conditional) ---
+HOP_WEB_PORT="${HOP_WEB_PORT:-8090}"
+if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'hop-web'; then
+    echo ""
+    echo "--- Pipeline Stack ---"
+    check_service "Hop Web (:$HOP_WEB_PORT)" \
+        "curl -sf http://localhost:${HOP_WEB_PORT}/ui"
+fi
+
 echo ""
 if [ "$FAILED" -eq 0 ]; then
     echo "=== All services healthy ==="

@@ -38,6 +38,11 @@ Enterprise-grade BI platform built on open-source components.
    ./scripts/seed.sh
    ```
 
+6. (Optional) Start pipeline stack (Apache Hop visual ETL):
+   ```bash
+   docker compose --profile pipeline up -d
+   ```
+
 ### Service Endpoints
 
 | Service | URL | Credentials |
@@ -49,6 +54,7 @@ Enterprise-grade BI platform built on open-source components.
 | Redis | `localhost:6379` | (no auth in dev) |
 | Redpanda (Kafka API) | `localhost:19092` | (no auth in dev) |
 | Redpanda Console | `http://localhost:8888` | (no auth) |
+| Hop Web (pipeline) | `http://localhost:8090/ui` | (no auth) |
 
 ### Keycloak Test Users
 
@@ -82,6 +88,7 @@ openinsight/
 ├── dbt/                       # Data transformation models
 ├── cube/                      # Semantic layer config
 ├── airflow/dags/              # Orchestration DAGs
+├── hop/                       # Apache Hop ETL projects + pipelines
 ├── keycloak/                  # Realm config + SPI extensions
 ├── superset/                  # Visualization config
 ├── scripts/                   # Operational scripts

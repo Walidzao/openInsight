@@ -1,0 +1,9 @@
+{
+  "config_version": "1",
+  "metadataBaseFolder": "${PROJECT_HOME}/metadata",
+  "unitTestsBasePath": "${PROJECT_HOME}",
+  "dataSetsCsvFolder": "${PROJECT_HOME}/datasets",
+  "enforcingExecutionInHome": false,
+  "parentProjectReferenceName": "",
+  "variables": []
+}

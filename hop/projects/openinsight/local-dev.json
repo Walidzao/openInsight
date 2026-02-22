@@ -1,0 +1,60 @@
+{
+  "config_version": "1",
+  "variables": [
+    {
+      "name": "PG_HOST",
+      "value": "postgres",
+      "description": "PostgreSQL hostname (container name in docker-compose)"
+    },
+    {
+      "name": "PG_PORT",
+      "value": "5432",
+      "description": "PostgreSQL port"
+    },
+    {
+      "name": "PG_USER",
+      "value": "openinsight",
+      "description": "PostgreSQL username"
+    },
+    {
+      "name": "PG_PASS",
+      "value": "openinsight_dev",
+      "description": "PostgreSQL password"
+    },
+    {
+      "name": "PG_DB",
+      "value": "openinsight",
+      "description": "PostgreSQL database"
+    },
+    {
+      "name": "CH_HOST",
+      "value": "clickhouse",
+      "description": "ClickHouse hostname (container name in docker-compose)"
+    },
+    {
+      "name": "CH_PORT",
+      "value": "8123",
+      "description": "ClickHouse HTTP port"
+    },
+    {
+      "name": "CH_USER",
+      "value": "openinsight",
+      "description": "ClickHouse username"
+    },
+    {
+      "name": "CH_PASS",
+      "value": "openinsight_dev",
+      "description": "ClickHouse password"
+    },
+    {
+      "name": "KAFKA_BOOTSTRAP",
+      "value": "redpanda:9092",
+      "description": "Kafka/Redpanda bootstrap server (internal address)"
+    },
+    {
+      "name": "KAFKA_TOPIC_DIMENSIONS",
+      "value": "ingest.raw.dimensions",
+      "description": "Redpanda topic for dimension data ingestion"
+    }
+  ]
+}

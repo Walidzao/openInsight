@@ -3,7 +3,7 @@
 # =============================================================================
 # Core stack (always running):  docker compose up -d
 # App stack (future):           docker compose --profile app up -d
-# Pipeline stack (future):      docker compose --profile pipeline up -d
+# Pipeline stack:               docker compose --profile pipeline up -d
 # Full stack:                   docker compose --profile app --profile pipeline up -d
 # =============================================================================
 
@@ -155,6 +155,38 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Apache Hop Web — Visual ETL/Pipeline Designer (Pipeline profile)
+  # ---------------------------------------------------------------------------
+  hop-web:
+    image: apache/hop-web:2.10.0
+    container_name: openinsight-hop-web
+    profiles: ["pipeline"]
+    ports:
+      - "${HOP_WEB_PORT:-8090}:8080"
+    environment:
+      HOP_PROJECT_NAME: openinsight
+      HOP_PROJECT_FOLDER: /project
+      HOP_ENVIRONMENT_NAME: local-dev
+      HOP_ENVIRONMENT_CONFIG_FILE_NAME_PATHS: /project/local-dev.json
+      HOP_LOG_LEVEL: Basic
+    volumes:
+      - ./hop/projects/openinsight:/project
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ui || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
 volumes:

@@ -1,0 +1,8 @@
+{
+  "engineRunConfiguration": {
+    "name": "local",
+    "description": "Local single-threaded pipeline engine for development",
+    "enginePluginId": "Local",
+    "enginePluginName": "Hop local pipeline engine"
+  }
+}

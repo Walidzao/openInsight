@@ -31,7 +31,7 @@ The definitive technical spec is ARCHITECTURE.md in the repo root.
 ```bash
 docker compose up -d                            # Start core stack (PG, CH, Keycloak, Redis, Redpanda)
 docker compose --profile app up -d              # Add Superset, Cube, Trino (future)
-docker compose --profile pipeline up -d         # Add Airflow, dbt (future)
+docker compose --profile pipeline up -d         # Add Hop Web (+ Airflow, dbt future)
 ./scripts/check-health.sh                       # Verify all services
 ./scripts/seed.sh                               # Load sample data
 ```
@@ -45,8 +45,8 @@ docker compose --profile pipeline up -d         # Add Airflow, dbt (future)
 - Monorepo structure (ADR-012)
 
 ## Implementation Phases
-1. **Foundation** (current): Core infra, local dev, Keycloak, databases
-2. **Data Pipeline:** Hop, Kafka->CH, dbt, Airflow, Trino
+1. **Foundation** (complete): Core infra, local dev, Keycloak, databases, role matrix
+2. **Data Pipeline** (current): Hop, Kafka->CH, dbt, Airflow, Trino
 3. **Semantic & Viz:** Cube cluster, Superset, RLS, API Gateway
 4. **Governance:** DataHub, observability, load testing, DR
 
@@ -68,6 +68,9 @@ docker compose --profile pipeline up -d         # Add Airflow, dbt (future)
 - `scripts/seed-postgres.sql` — PostgreSQL dimension/reference seed data
 - `scripts/seed-clickhouse.sql` — ClickHouse fact table seed data
 - `scripts/check-health.sh` — service health checker
+- `hop/projects/openinsight/` — Hop ETL project (pipelines, environment config)
+- `hop/projects/openinsight/local-dev.json` — Hop environment variables (connection strings)
+- `hop/projects/openinsight/pipelines/` — Hop pipeline files (.hpl)
 
 ## Service Ports (Local Dev)
 | Service          | Port  |
@@ -84,4 +87,5 @@ docker compose --profile pipeline up -d         # Add Airflow, dbt (future)
 | Superset (future)| 8088  |
 | Cube (future)    | 4000  |
 | Trino (future)   | 8085  |
+| Hop Web (pipeline)| 8090  |
 | Airflow (future) | 8081  |
