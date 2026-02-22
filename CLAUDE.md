@@ -63,7 +63,10 @@ docker compose --profile pipeline up -d         # Add Airflow, dbt (future)
 - `keycloak/realm-openinsight.json` — Keycloak realm config
 - `.env.example` — required environment variables
 - `scripts/init-postgres.sh` — creates keycloak, superset, airflow databases
-- `scripts/seed.sh` — sample data loader
+- `scripts/init-redpanda.sh` — creates Kafka topics with retention policies
+- `scripts/seed.sh` — sample data loader (PG dimensions + CH facts + topics)
+- `scripts/seed-postgres.sql` — PostgreSQL dimension/reference seed data
+- `scripts/seed-clickhouse.sql` — ClickHouse fact table seed data
 - `scripts/check-health.sh` — service health checker
 
 ## Service Ports (Local Dev)
