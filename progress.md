@@ -253,6 +253,7 @@ hop/projects/openinsight/
 | CH-01 | ClickHouse HTTP API: 1 statement per request | `seed.sh` splits on `;` and sends each statement individually |
 | HOP-01 | `enforcingExecutionInHome: "N"` invalid in Hop 2.10 | Fixed to boolean `false` |
 | HOP-02 | Project registration error on first start | Resolved on restart; project/environment correctly registered |
+| HOP-03 | `pipeline-run-configuration/local.json` wrong schema | Hop serializes engine config as `{"engineRunConfiguration": {"Local": {...}}, "name": "local", ...}` — plugin ID is the key, not nested `enginePluginId` field. Copied exact structure from Hop's built-in default project. |
 
 ---
 
