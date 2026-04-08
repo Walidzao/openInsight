@@ -50,6 +50,8 @@ docker compose --profile pipeline up -d         # Add Hop Web (+ Airflow, dbt fu
 3. **Semantic & Viz:** Cube cluster, Superset, RLS, API Gateway
 4. **Governance:** DataHub, observability, load testing, DR
 
+**→ See `progress.md` for current implementation status, detailed task specifications, guardrails, and execution guidelines.**
+
 ## Conventions
 - All config is IaC (Terraform, Helm, docker-compose) — no manual UI config in prod
 - Secrets via .env locally, Sealed Secrets in K8s

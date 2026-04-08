@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Core Stack (PG, CH, Keycloak, Redis, Redpanda)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up", "-d"],
+      "port": 8080
+    },
+    {
+      "name": "Pipeline Stack (Core + Hop Web)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "--profile", "pipeline", "up", "-d"],
+      "port": 8090
+    },
+    {
+      "name": "Health Check",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/check-health.sh"],
+      "port": 0
+    },
+    {
+      "name": "Seed Data",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/seed.sh"],
+      "port": 0
+    },
+    {
+      "name": "Redpanda Console",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up", "-d", "redpanda-console"],
+      "port": 8888
+    }
+  ]
+}
