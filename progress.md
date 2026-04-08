@@ -1,6 +1,6 @@
 # OpenInsight — Implementation Progress
 
-> **Last updated:** 2026-02-22
+> **Last updated:** 2026-04-08
 > **Branch:** `main`
 > **Implementation target:** ARCHITECTURE.md (841 lines, single source of truth)
 
@@ -11,7 +11,7 @@
 | Phase | Description | Status | Progress |
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
-| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino | 🔄 In Progress | 1/5 tasks |
+| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino | 🔄 In Progress | 3/5 tasks |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
 
@@ -20,12 +20,13 @@
 ## Git Commits
 
 ```
+ae8b616  Phase 2 progress: Kafka→CH DDL, dbt skeleton, Hop RDBMS connections
+f808f81  Fix Hop pipeline-run-configuration schema for Hop 2.10
+2e4542e  Phase 1 complete + Phase 2 start: Keycloak role matrix and Apache Hop Web
 28d9677  Complete Phase 1: Redpanda topics, seed data for PG and ClickHouse
 df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 674aead  Initial commit: project scaffolding and local dev environment
 ```
-
-> **Pending commit:** Phase 1 role matrix + Phase 2 Hop Web (uncommitted — all working, verified)
 
 ---
 
@@ -122,13 +123,13 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 2.1 | Apache Hop | 🔄 In Progress | Hop Web running (see below); pipelines TBD |
-| 2.2 | Kafka→ClickHouse | ✅ Done | Kafka Engine DDL + materialized views |
-| 2.3 | dbt Project | ⏳ Pending | Skeleton, staging/mart models, tests |
-| 2.4 | Airflow | ⏳ Pending | Helm values, DAGs for Hop + dbt |
-| 2.5 | Trino | ⏳ Pending | Catalog configs (ClickHouse + PostgreSQL connectors) |
+| 2.1 | Apache Hop | ✅ Done | Hop Web running at :8090, project + env + RDBMS connections configured |
+| 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs (not yet applied to running CH) |
+| 2.3 | dbt Project | ✅ Done | Skeleton committed: staging views, mart tables, profiles.yml (not yet run) |
+| 2.4 | Airflow | ⏳ Pending | Next |
+| 2.5 | Trino | ⏳ Pending | After Airflow |
 
-### 2.1 Apache Hop Web ✅ Running
+### 2.1 Apache Hop Web ✅ Done
 
 **Started with:** `docker compose --profile pipeline up -d`
 **URL:** http://localhost:8090/ui
@@ -141,71 +142,92 @@ hop/projects/openinsight/
 ├── project-config.json          # Hop project metadata
 ├── local-dev.json               # Environment variables (PG, CH, Kafka connections)
 ├── metadata/
-│   └── pipeline-run-configuration/
-│       └── local.json           # Local execution engine config
+│   ├── pipeline-run-configuration/
+│   │   └── local.json           # Local execution engine config
+│   └── rdbms-connection/
+│       ├── openinsight-postgres.json    # PG connection (uses env vars)
+│       └── openinsight-clickhouse.json  # CH connection (uses env vars)
 └── pipelines/
-    └── sample-ingest-to-kafka.hpl   # Sample: PG customers → Redpanda
+    └── sample-ingest-to-kafka.hpl   # Sample: PG customers → log output
 ```
 
-#### Environment Variables (local-dev.json)
+#### RDBMS Connection Metadata Format (Hop 2.10)
 
-| Variable | Value | Description |
+Hop serializes database connections as:
+```json
+{
+  "rdbms": {
+    "<PLUGIN_TYPE>": {   // e.g. "POSTGRESQL", "CLICKHOUSE"
+      "accessType": 0,
+      "hostname": "...", "port": "...", "databaseName": "...",
+      "username": "...", "password": "..."
+    }
+  },
+  "name": "connection-name"
+}
+```
+Plugin types confirmed via bytecode: `POSTGRESQL` (`PostgreSqlDatabaseMeta`), `CLICKHOUSE` (`ClickhouseDatabaseMeta`).
+
+### 2.2 Kafka→ClickHouse ✅ DDL Ready
+
+**File:** `scripts/clickhouse-kafka-tables.sql`
+
+Creates two Kafka Engine tables pointing at Redpanda, with materialized views inserting into existing MergeTree tables:
+
+| Kafka Engine Table | Topic | MV Target |
 |---|---|---|
-| `PG_HOST` | `postgres` | PostgreSQL container hostname |
-| `PG_PORT` | `5432` | PostgreSQL port |
-| `PG_USER` | `openinsight` | PG user |
-| `PG_PASS` | `openinsight_dev` | PG password |
-| `PG_DB` | `openinsight` | PG database |
-| `CH_HOST` | `clickhouse` | ClickHouse container hostname |
-| `CH_PORT` | `8123` | ClickHouse HTTP port |
-| `CH_USER` | `openinsight` | CH user |
-| `CH_PASS` | `openinsight_dev` | CH password |
-| `KAFKA_BOOTSTRAP` | `redpanda:9092` | Redpanda internal address |
-| `KAFKA_TOPIC_DIMENSIONS` | `ingest.raw.dimensions` | Target topic |
+| `ingest_raw_transactions` | `ingest.raw.transactions` | `fct_sales` |
+| `ingest_raw_events` | `ingest.raw.events` | `fct_events` |
 
-#### Sample Pipeline
+**Not yet applied** — run manually via CH HTTP API or integrate into seed.sh when ready.
 
-`sample-ingest-to-kafka.hpl` — demonstrates core ingestion pattern:
-1. **Table Input** → reads `customers` joined with `regions` + `departments` from PostgreSQL
-2. **Add Constants** → appends `source_system`, `ingested_at`, `pipeline_name`
-3. **Select Values** → clean field ordering
-4. **Write to Log** → verification output (replace with Kafka Producer step for production)
+### 2.3 dbt Project ✅ Skeleton Ready
 
-> **Note:** The WriteToLog step is intentional for local dev visibility. Production pipelines should use the Kafka Producer step targeting `${KAFKA_BOOTSTRAP}` / `${KAFKA_TOPIC_DIMENSIONS}`.
+```
+dbt/
+├── dbt_project.yml         # Profile: openinsight, vars for PG connection
+├── profiles.yml            # dbt-clickhouse adapter, native port 9000
+├── models/
+│   ├── staging/
+│   │   ├── _sources.yml    # Sources: fct_sales, fct_events in CH
+│   │   ├── stg_sales.sql   # Pass-through view on fct_sales
+│   │   └── stg_events.sql  # Pass-through view on fct_events
+│   └── mart/
+│       └── dim_customers.sql  # CH postgresql() function → PG customers table
+```
 
-### Next Phase 2 Steps
+**Design decision:** `dim_customers.sql` uses ClickHouse's built-in `postgresql()` table function to pull dimension data from PG directly, avoiding Trino for local dev. Credentials are parameterized via dbt `var()` with env var fallbacks.
 
-1. **2.2 Kafka → ClickHouse Engine** — Create Kafka Engine tables in ClickHouse:
-   - `ingest_raw_events` (Kafka Engine) → `fct_events` (Materialized View → MergeTree)
-   - `ingest_raw_transactions` (Kafka Engine) → `fct_sales` (Materialized View → MergeTree)
-   - Script: `scripts/clickhouse-kafka-tables.sql`
+**Not yet run** — requires `pip install dbt-clickhouse` and `dbt run`.
 
-2. **2.3 dbt Project** — Scaffold in `dbt/`:
-   - `dbt_project.yml`, `profiles.yml`
-   - `models/staging/stg_customers.sql`, `stg_sales.sql`
-   - `models/mart/dim_customers.sql`, `fct_sales.sql`
-   - Schema tests: `unique`, `not_null`, `relationships`
+---
 
-3. **2.4 Airflow** — Add to `pipeline` profile:
-   - Docker service: `apache/airflow:2.8.x` with LocalExecutor
-   - DAGs: `dag_hop_ingest.py`, `dag_dbt_transform.py`, `dag_data_quality.py`
-   - Keycloak OIDC integration using `airflow-dev-secret`
+## Remaining Phase 2 Work — Implementation Plan
 
-4. **2.5 Trino** — Add to `app` profile (future):
-   - Connectors: ClickHouse + PostgreSQL catalogs
-   - Port 8085
+See detailed plan below in "Next Steps for Implementation Agent" section.
 
 ---
 
 ## Phase 3: Semantic & Visualization ⏳ PENDING
 
+**DO NOT START Phase 3 until Phase 2 is verified end-to-end.**
+
 | # | Task | Notes |
 |---|---|---|
 | 3.1 | Cube Cluster | `cube.js` config, schema YAML from dbt manifest, Redis-backed cache |
 | 3.2 | Cache Invalidation | Keycloak events → Redpanda → Redis pub/sub → Cube eviction |
-| 3.3 | Superset | OIDC config, Keycloak group → Superset role mapping |
+| 3.3 | Superset | OIDC config via `AUTH_OAUTH` (NOT `AUTH_OID`), Keycloak role mapping |
 | 3.4 | RLS | Cube `security_context`, department/group data isolation |
 | 3.5 | API Gateway | Kong or NGINX Ingress, rate limits, TLS termination |
+
+### Phase 3 Guardrails (Lessons from dropped code)
+
+- Superset auth: use `AUTH_OAUTH` not `AUTH_OID`
+- Cube connects to ClickHouse via REST/GraphQL API, NOT PostgreSQL wire protocol
+- Superset connects to Cube via the Cube SQL API (port 4000, PG-compatible wire)
+- Add `CUBEJS_DEV_MODE=true` for local dev
+- Each Phase 3 service needs a healthcheck in docker-compose.yml
+- Do not add services to docker-compose.yml until they're tested
 
 ---
 
@@ -235,10 +257,11 @@ hop/projects/openinsight/
 | `scripts/seed.sh` | Orchestrates: topics → PG seed → CH seed |
 | `scripts/seed-postgres.sql` | PG dimension/reference seed data |
 | `scripts/seed-clickhouse.sql` | CH fact table seed data |
+| `scripts/clickhouse-kafka-tables.sql` | Kafka Engine + MVs for streaming ingest |
 | `scripts/check-health.sh` | Health check (core + optional pipeline stack) |
-| `hop/projects/openinsight/project-config.json` | Hop project root config |
-| `hop/projects/openinsight/local-dev.json` | Hop environment: connection strings |
-| `hop/projects/openinsight/pipelines/*.hpl` | Hop pipeline files |
+| `hop/projects/openinsight/` | Hop ETL project (pipelines, environment config) |
+| `dbt/` | dbt-clickhouse project (staging views, mart tables) |
+| `docs/SIMILAR_PROJECTS.md` | Reference: similar open-source data stacks |
 
 ---
 
@@ -253,7 +276,9 @@ hop/projects/openinsight/
 | CH-01 | ClickHouse HTTP API: 1 statement per request | `seed.sh` splits on `;` and sends each statement individually |
 | HOP-01 | `enforcingExecutionInHome: "N"` invalid in Hop 2.10 | Fixed to boolean `false` |
 | HOP-02 | Project registration error on first start | Resolved on restart; project/environment correctly registered |
-| HOP-03 | `pipeline-run-configuration/local.json` wrong schema | Hop serializes engine config as `{"engineRunConfiguration": {"Local": {...}}, "name": "local", ...}` — plugin ID is the key, not nested `enginePluginId` field. Copied exact structure from Hop's built-in default project. |
+| HOP-03 | `pipeline-run-configuration/local.json` wrong schema | Plugin ID is the key under `engineRunConfiguration`, not a nested field |
+| HOP-04 | `rdbms-connection/*.json` schema | Plugin type (e.g. `POSTGRESQL`) is the key under `"rdbms"`, not `"databaseType"` |
+| REVIEW-01 | Phase 3 code dropped from other agent | Superset config used wrong auth type, Cube connection URI was incorrect, services added without testing. Dropped; guardrails documented above. |
 
 ---
 
@@ -261,7 +286,7 @@ hop/projects/openinsight/
 
 | ADR | Decision | Implementation |
 |---|---|---|
-| ADR-001 | Kafka as message backbone | Redpanda (Kafka-compatible) running with 7 topics |
+| ADR-001 | Kafka as message backbone | Redpanda running + Kafka Engine DDL ready |
 | ADR-002 | Redis for Cube cache | Redis 7 with LRU eviction running; pub/sub pending Phase 3 |
 | ADR-007 | Event-driven cache invalidation | `keycloak.events` topic created; listener pending Phase 3 |
 | ADR-009 | Namespace isolation | Docker network `openinsight`; K8s NetworkPolicies deferred |
@@ -298,4 +323,168 @@ docker compose start keycloak
 
 # Inspect Redpanda topics
 docker compose exec -T redpanda rpk topic list
+
+# Apply Kafka Engine tables (when ready)
+# Split on ; and send each statement individually (CH HTTP API limitation)
 ```
+
+---
+
+## Next Steps for Implementation Agent
+
+### Priority: Complete Phase 2 (tasks 2.4 and 2.5), then verify the full pipeline
+
+### RULES FOR THE IMPLEMENTATION AGENT
+
+1. **Stay in Phase 2.** Do not create Phase 3 files (Cube, Superset, API Gateway). They will be designed and reviewed separately.
+2. **Test before committing.** Every service added to docker-compose must start healthy before being committed. Run `./scripts/check-health.sh` after changes.
+3. **Follow existing patterns.** Look at how `hop-web` was added to docker-compose.yml — same structure: `profiles`, `depends_on` with `condition: service_healthy`, healthcheck, `restart: unless-stopped`.
+4. **Use environment variables.** Never hardcode credentials in config files. Use `${VAR:-default}` in docker-compose and env var functions in application configs.
+5. **One concern per commit.** Don't bundle Airflow + Trino + dbt tests in one commit.
+6. **Read ARCHITECTURE.md Section 9** (Phased Implementation Plan) before starting. Tasks 2.4 and 2.5 are defined there.
+7. **Read the Hop metadata format notes** (HOP-03, HOP-04 in Known Issues) before writing any Hop metadata JSON.
+
+---
+
+### Task 2.4: Airflow (pipeline profile)
+
+**Goal:** Add Apache Airflow to the `pipeline` docker-compose profile for orchestrating Hop pipelines and dbt runs.
+
+#### 2.4.1 Docker service
+
+Add `airflow` service to `docker-compose.yml` under `profiles: ["pipeline"]`:
+
+- **Image:** `apache/airflow:2.8.4-python3.11`
+- **Port:** `${AIRFLOW_PORT:-8081}:8080`
+- **Executor:** `LocalExecutor` (single-node, no Celery needed for dev)
+- **Metadata DB:** PostgreSQL — `postgresql+psycopg2://openinsight:openinsight_dev@postgres:5432/airflow`
+  - The `airflow` database already exists (created by `scripts/init-postgres.sh`)
+- **depends_on:** `postgres` (healthy), `redpanda` (healthy)
+- **Volumes:** `./airflow/dags:/opt/airflow/dags`
+- **Environment:**
+  ```
+  AIRFLOW__CORE__EXECUTOR=LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://openinsight:openinsight_dev@postgres:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY=  (empty is fine for dev — no encrypted connections)
+  AIRFLOW__CORE__LOAD_EXAMPLES=false
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+  ```
+- **Entrypoint override:** Airflow needs `airflow db migrate` before the webserver starts. Use a command like:
+  ```
+  command: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@openinsight.local || true && airflow webserver"
+  ```
+  Alternatively, create a `scripts/airflow-entrypoint.sh` that handles init + webserver.
+- **Healthcheck:** `curl -sf http://localhost:8080/health`
+- **Scheduler:** For LocalExecutor, the scheduler must also run. Either:
+  - (a) Run scheduler in the same container via `airflow webserver & airflow scheduler` (simpler for dev)
+  - (b) Add a second `airflow-scheduler` service (cleaner but more resources)
+  - **Decision: option (a)** for local dev simplicity.
+
+#### 2.4.2 DAG scaffolds
+
+Create minimal DAG files in `airflow/dags/`. These should be syntactically valid Python that Airflow can parse, but don't need to be fully functional yet:
+
+- `dag_hop_ingest.py` — BashOperator calling Hop CLI to run a pipeline (placeholder command)
+- `dag_dbt_transform.py` — BashOperator calling `dbt run` and `dbt test`
+
+Keep them simple: one DAG per file, `schedule=None` (manual trigger), `catchup=False`.
+
+#### 2.4.3 Update supporting files
+
+- `scripts/check-health.sh` — add conditional Airflow check (same pattern as Hop Web conditional check)
+- `.env.example` — uncomment `AIRFLOW_PORT=8081`
+
+#### 2.4.4 Verify
+
+- `docker compose --profile pipeline up -d` → all pipeline services (Hop + Airflow) start healthy
+- Airflow UI accessible at http://localhost:8081
+- DAGs appear in the DAG list (no import errors)
+
+---
+
+### Task 2.5: Trino (app profile)
+
+**Goal:** Add Trino as a query federation layer, connecting both ClickHouse and PostgreSQL.
+
+#### 2.5.1 Docker service
+
+Add `trino` service to `docker-compose.yml` under `profiles: ["app"]`:
+
+- **Image:** `trinodb/trino:435`
+- **Port:** `${TRINO_PORT:-8085}:8080`
+- **Volumes:** `./trino/etc:/etc/trino` (catalog configs)
+- **depends_on:** `postgres` (healthy), `clickhouse` (healthy)
+- **Healthcheck:** `curl -sf http://localhost:8080/v1/info | grep -q '"starting":false'`
+
+#### 2.5.2 Catalog configs
+
+Create `trino/etc/` directory structure:
+
+```
+trino/etc/
+├── config.properties           # coordinator config
+├── jvm.config                  # JVM settings (reduced for dev)
+├── node.properties             # node ID
+├── catalog/
+│   ├── clickhouse.properties   # ClickHouse connector
+│   └── postgresql.properties   # PostgreSQL connector
+```
+
+**config.properties:**
+```
+coordinator=true
+node-scheduler.include-coordinator=true
+http-server.http.port=8080
+discovery.uri=http://localhost:8080
+```
+
+**jvm.config** (reduced for dev):
+```
+-server
+-Xmx1G
+-XX:+UseG1GC
+```
+
+**catalog/clickhouse.properties:**
+```
+connector.name=clickhouse
+connection-url=jdbc:clickhouse://clickhouse:8123/openinsight
+connection-user=openinsight
+connection-password=openinsight_dev
+```
+
+**catalog/postgresql.properties:**
+```
+connector.name=postgresql
+connection-url=jdbc:postgresql://postgres:5432/openinsight
+connection-user=openinsight
+connection-password=openinsight_dev
+```
+
+#### 2.5.3 Verify
+
+- `docker compose --profile app up -d` starts Trino
+- Test: `docker compose exec trino trino --execute "SELECT count(*) FROM clickhouse.openinsight.fct_sales"`
+- Test: `docker compose exec trino trino --execute "SELECT count(*) FROM postgresql.public.customers"`
+
+#### 2.5.4 Update supporting files
+
+- `scripts/check-health.sh` — add conditional Trino check
+- `.env.example` — uncomment `TRINO_PORT=8085`
+
+---
+
+### After 2.4 + 2.5: End-to-End Verification
+
+Before declaring Phase 2 complete, verify the full pipeline works:
+
+1. **Core stack healthy** — `docker compose up -d && ./scripts/check-health.sh`
+2. **Seed data loaded** — `./scripts/seed.sh`
+3. **Hop Web opens** — http://localhost:8090/ui, openinsight project loads, RDBMS connections visible
+4. **Kafka Engine applied** — Run `clickhouse-kafka-tables.sql` against ClickHouse
+5. **dbt runs** — `cd dbt && dbt run && dbt test` (requires dbt-clickhouse installed)
+6. **Airflow UI** — http://localhost:8081, DAGs visible, no import errors
+7. **Trino queries** — Cross-source query via Trino CLI
+8. **Update progress.md** — Mark Phase 2 complete
+
+Only then proceed to Phase 3.
