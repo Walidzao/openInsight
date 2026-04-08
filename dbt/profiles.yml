@@ -1,0 +1,10 @@
+openinsight:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      host: "{{ env_var('CH_HOST', 'localhost') }}"
+      port: "{{ env_var('CH_NATIVE_PORT', 9000) }}"
+      user: "{{ env_var('CH_USER', 'openinsight') }}"
+      password: "{{ env_var('CH_PASS', 'openinsight_dev') }}"
+      schema: openinsight

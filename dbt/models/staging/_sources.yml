@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: openinsight
+    schema: openinsight
+    tables:
+      - name: fct_sales
+      - name: fct_events

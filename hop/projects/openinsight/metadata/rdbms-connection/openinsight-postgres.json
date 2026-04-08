@@ -1,0 +1,18 @@
+{
+  "rdbms": {
+    "POSTGRESQL": {
+      "accessType": 0,
+      "hostname": "${PG_HOST}",
+      "port": "${PG_PORT}",
+      "databaseName": "${PG_DB}",
+      "username": "${PG_USER}",
+      "password": "${PG_PASS}",
+      "manualUrl": "",
+      "servername": "",
+      "dataTablespace": "",
+      "indexTablespace": "",
+      "attributes": {}
+    }
+  },
+  "name": "openinsight-postgres"
+}

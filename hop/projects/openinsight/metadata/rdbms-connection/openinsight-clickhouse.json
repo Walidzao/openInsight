@@ -1,0 +1,18 @@
+{
+  "rdbms": {
+    "CLICKHOUSE": {
+      "accessType": 0,
+      "hostname": "${CH_HOST}",
+      "port": "${CH_PORT}",
+      "databaseName": "openinsight",
+      "username": "${CH_USER}",
+      "password": "${CH_PASS}",
+      "manualUrl": "",
+      "servername": "",
+      "dataTablespace": "",
+      "indexTablespace": "",
+      "attributes": {}
+    }
+  },
+  "name": "openinsight-clickhouse"
+}

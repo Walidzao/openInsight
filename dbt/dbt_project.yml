@@ -1,0 +1,31 @@
+name: 'openinsight'
+version: '1.0.0'
+config-version: 2
+
+profile: 'openinsight'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  pg_host: "{{ env_var('PG_HOST', 'postgres') }}"
+  pg_port: "{{ env_var('PG_PORT', '5432') }}"
+  pg_database: "{{ env_var('PG_DB', 'openinsight') }}"
+  pg_user: "{{ env_var('PG_USER', 'openinsight') }}"
+  pg_password: "{{ env_var('PG_PASS', 'openinsight_dev') }}"
+
+models:
+  openinsight:
+    staging:
+      +materialized: view
+    mart:
+      +materialized: table

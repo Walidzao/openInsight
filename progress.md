@@ -123,7 +123,7 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 2.1 | Apache Hop | 🔄 In Progress | Hop Web running (see below); pipelines TBD |
-| 2.2 | Kafka→ClickHouse | ⏳ Pending | Kafka Engine DDL + materialized views |
+| 2.2 | Kafka→ClickHouse | ✅ Done | Kafka Engine DDL + materialized views |
 | 2.3 | dbt Project | ⏳ Pending | Skeleton, staging/mart models, tests |
 | 2.4 | Airflow | ⏳ Pending | Helm values, DAGs for Hop + dbt |
 | 2.5 | Trino | ⏳ Pending | Catalog configs (ClickHouse + PostgreSQL connectors) |
