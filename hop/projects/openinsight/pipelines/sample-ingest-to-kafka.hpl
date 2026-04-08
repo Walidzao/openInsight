@@ -1,13 +1,14 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <!--
   OpenInsight Sample Pipeline: PostgreSQL Customers → Redpanda
 
   Demonstrates the core data flow pattern:
-    Source (PostgreSQL) → Transform (add metadata) → Sink (Kafka/Redpanda)
+    Source (PostgreSQL) → Transform (add metadata) → JSON → Sink (Kafka/Redpanda)
 
   This pipeline reads the customers dimension table from PostgreSQL,
-  adds source metadata fields, and publishes to the ingest.raw.dimensions
-  topic on Redpanda for downstream consumption by ClickHouse Kafka Engine.
+  adds source metadata fields, serializes to JSON, and publishes to the
+  ingest.raw.dimensions topic on Redpanda for downstream consumption
+  by ClickHouse Kafka Engine.
 
   Prerequisites:
     - PostgreSQL running with seed data loaded (./scripts/seed.sh)
@@ -76,7 +77,12 @@ Reads dimension data and publishes to ingest.raw.dimensions topic</note>
     </hop>
     <hop>
       <from>Select Fields</from>
-      <to>Write to Log</to>
+      <to>JSON output</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>JSON output</from>
+      <to>Kafka Producer</to>
       <enabled>Y</enabled>
     </hop>
   </order>
@@ -90,7 +96,7 @@ Reads dimension data and publishes to ingest.raw.dimensions topic</note>
     <partitioning>
       <method>none</method>
     </partitioning>
-    <connection/>
+    <connection>openinsight-postgres</connection>
     <sql>SELECT
   c.id AS customer_id,
   c.name AS customer_name,
@@ -226,43 +232,108 @@ ORDER BY c.id</sql>
     </GUI>
   </transform>
   <transform>
-    <name>Write to Log</name>
-    <type>WriteToLog</type>
-    <description>Log output for verification (replace with Kafka Producer in production)</description>
+    <name>JSON output</name>
+    <type>JsonOutput</type>
+    <description>Serialize row data to JSON for Kafka message</description>
     <distribute>Y</distribute>
     <custom_distribution/>
     <copies>1</copies>
     <partitioning>
       <method>none</method>
     </partitioning>
-    <loglevel>log_level_basic</loglevel>
-    <displayHeader>Y</displayHeader>
-    <limitRows>N</limitRows>
-    <limitRowsNumber>0</limitRowsNumber>
-    <logmessage>Customer dimension record</logmessage>
+    <outputValue>kafka_message</outputValue>
+    <jsonBloc>data</jsonBloc>
+    <nrRowsInBloc>1</nrRowsInBloc>
+    <operation_type>outputvalue</operation_type>
+    <compatibility_mode>N</compatibility_mode>
+    <encoding>UTF-8</encoding>
+    <addtoresult>N</addtoresult>
+    <file>
+      <name/>
+      <extention>json</extention>
+      <append>N</append>
+      <split>N</split>
+      <haspartno>N</haspartno>
+      <add_date>N</add_date>
+      <add_time>N</add_time>
+      <create_parent_folder>N</create_parent_folder>
+      <DoNotOpenNewFileInit>N</DoNotOpenNewFileInit>
+      <servlet_output>N</servlet_output>
+    </file>
     <fields>
       <field>
         <name>customer_id</name>
+        <element>customer_id</element>
       </field>
       <field>
         <name>customer_name</name>
+        <element>customer_name</element>
+      </field>
+      <field>
+        <name>email</name>
+        <element>email</element>
       </field>
       <field>
         <name>region_code</name>
+        <element>region_code</element>
+      </field>
+      <field>
+        <name>region_name</name>
+        <element>region_name</element>
       </field>
       <field>
         <name>department_code</name>
+        <element>department_code</element>
+      </field>
+      <field>
+        <name>department_name</name>
+        <element>department_name</element>
       </field>
       <field>
         <name>tier</name>
+        <element>tier</element>
+      </field>
+      <field>
+        <name>created_at</name>
+        <element>created_at</element>
       </field>
       <field>
         <name>source_system</name>
+        <element>source_system</element>
+      </field>
+      <field>
+        <name>ingested_at</name>
+        <element>ingested_at</element>
+      </field>
+      <field>
+        <name>pipeline_name</name>
+        <element>pipeline_name</element>
       </field>
     </fields>
-    <attributes/>
     <GUI>
-      <xloc>900</xloc>
+      <xloc>800</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Kafka Producer</name>
+    <type>KafkaProducerOutput</type>
+    <description>Publish JSON messages to Redpanda topic</description>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+    </partitioning>
+    <connectionType>DIRECT</connectionType>
+    <directBootstrapServers>${KAFKA_BOOTSTRAP}</directBootstrapServers>
+    <topic>${KAFKA_TOPIC_DIMENSIONS}</topic>
+    <clientId>hop-client</clientId>
+    <keyField>customer_id</keyField>
+    <messageField>kafka_message</messageField>
+    <advancedConfig/>
+    <GUI>
+      <xloc>950</xloc>
       <yloc>200</yloc>
     </GUI>
   </transform>

@@ -189,6 +189,31 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # Superset — Visualization (App profile - Minimal M.3)
+  # ---------------------------------------------------------------------------
+  superset:
+    image: apache/superset:3.1.0
+    container_name: openinsight-superset
+    profiles: ["app"]
+    ports:
+      - "${SUPERSET_PORT:-8088}:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-changeme-generate-a-real-secret}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://openinsight:openinsight_dev@postgres:5432/superset
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local

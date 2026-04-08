@@ -62,6 +62,15 @@ if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}'
         "curl -sf http://localhost:${HOP_WEB_PORT}/ui"
 fi
 
+# --- App profile services (conditional) ---
+SUPERSET_PORT="${SUPERSET_PORT:-8088}"
+if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'superset'; then
+    echo ""
+    echo "--- App Stack ---"
+    check_service "Superset (:$SUPERSET_PORT)" \
+        "curl -sf http://localhost:${SUPERSET_PORT}/health"
+fi
+
 echo ""
 if [ "$FAILED" -eq 0 ]; then
     echo "=== All services healthy ==="

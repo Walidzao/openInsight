@@ -70,6 +70,20 @@ while IFS= read -r stmt; do
 done < <(sed 's/--.*$//' "$SCRIPT_DIR/seed-clickhouse.sql" | tr '\n' ' ' | sed 's/;/;\n/g')
 echo "  ClickHouse seed complete"
 
+echo "  Applying ClickHouse Kafka Engine MVs..."
+while IFS= read -r stmt; do
+    trimmed=$(echo "$stmt" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    if [ -n "$trimmed" ] && ! echo "$trimmed" | grep -q '^--'; then
+        curl -sf "http://${CH_HOST}:${CH_PORT}/" \
+            --user "${CH_USER}:${CH_PASS}" \
+            --data "$trimmed" || {
+            echo "  ERROR executing Kafka Engine DDL: ${trimmed:0:80}..."
+            exit 1
+        }
+    fi
+done < <(sed 's/--.*$//' "$SCRIPT_DIR/clickhouse-kafka-tables.sql" | tr '\n' ' ' | sed 's/;/;\n/g')
+echo "  Kafka DDL applied."
+
 echo ""
 echo "--- Verification ---"
 PG_COUNT=$(docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec -T postgres \

@@ -12,6 +12,7 @@
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
 | **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino | 🔄 In Progress | 3/5 tasks |
+| **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | ⏳ Next | 0/4 tasks (~250 lines) |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
 
@@ -202,6 +203,43 @@ dbt/
 
 ---
 
+## 🛑 MILESTONE: First E2E Architecture Test
+
+**HARD STOP — The agent MUST reach this milestone and stop. Do NOT proceed to Airflow, Trino, or any other work until the user has manually tested and confirmed the pipeline works.**
+
+**Goal:** Prove the core data flow: **Hop → Kafka → ClickHouse → Superset**
+
+| # | Task | Status | ~Lines | Notes |
+|---|---|---|---|---|
+| M.1 | Hop pipeline (PG → Kafka) | ✅ | ~140 | `.hpl` patched: WriteToLog replaced with JSON output → Kafka Producer |
+| M.2 | Apply Kafka Engine DDL | ✅ | ~15 | `seed.sh` now auto-applies `clickhouse-kafka-tables.sql` |
+| M.3 | Minimal Superset | ✅ | ~80 | docker-compose `app` profile + `superset_config.py` + `init-superset.sh` |
+| M.4 | Health check + env | ✅ | ~11 | `check-health.sh` + `.env.example` updated |
+
+**Total: ~250 lines of config/code (XML, YAML, Python, Shell)**
+
+### What is NOT needed for this milestone
+- ❌ Airflow (trigger Hop pipeline manually from Hop Web UI)
+- ❌ Trino (Superset connects directly to ClickHouse)
+- ❌ Cube (Superset queries CH without semantic layer)
+- ❌ Keycloak OIDC for Superset (use built-in admin login)
+- ❌ dbt (fact tables already seeded; staging views are nice-to-have)
+
+### Verification steps (user performs manually)
+1. `docker compose up -d` — core stack healthy
+2. `./scripts/seed.sh` — seed data + apply Kafka Engine DDL
+3. `docker compose --profile pipeline up -d` — Hop Web starts
+4. Open Hop Web (http://localhost:8090/ui), run the PG→Kafka pipeline
+5. Check Redpanda Console (http://localhost:8888) — messages appear in topic
+6. Query ClickHouse — data landed in `fct_sales` via Kafka Engine + MV
+7. `docker compose --profile app up -d` — Superset starts
+8. Open Superset (http://localhost:8088), log in as admin, add ClickHouse datasource
+9. Create a simple chart from `fct_sales` — **if this works, architecture is validated**
+
+### After verification: resume Phase 2 (Airflow, Trino, dbt run) then Phase 3
+
+---
+
 ## Remaining Phase 2 Work — Implementation Plan
 
 See detailed plan below in "Next Steps for Implementation Agent" section.
@@ -332,17 +370,25 @@ docker compose exec -T redpanda rpk topic list
 
 ## Next Steps for Implementation Agent
 
-### Priority: Complete Phase 2 (tasks 2.4 and 2.5), then verify the full pipeline
+### Priority: Complete the 🛑 E2E Milestone FIRST, then tasks 2.4 and 2.5
 
 ### RULES FOR THE IMPLEMENTATION AGENT
 
-1. **Stay in Phase 2.** Do not create Phase 3 files (Cube, Superset, API Gateway). They will be designed and reviewed separately.
+**Permanent rules (apply to all phases):**
+
+1. **Stay in Phase 2.** Do not create Phase 3 files (Cube, API Gateway, full Superset OIDC). They will be designed and reviewed separately.
 2. **Test before committing.** Every service added to docker-compose must start healthy before being committed. Run `./scripts/check-health.sh` after changes.
 3. **Follow existing patterns.** Look at how `hop-web` was added to docker-compose.yml — same structure: `profiles`, `depends_on` with `condition: service_healthy`, healthcheck, `restart: unless-stopped`.
 4. **Use environment variables.** Never hardcode credentials in config files. Use `${VAR:-default}` in docker-compose and env var functions in application configs.
 5. **One concern per commit.** Don't bundle Airflow + Trino + dbt tests in one commit.
 6. **Read ARCHITECTURE.md Section 9** (Phased Implementation Plan) before starting. Tasks 2.4 and 2.5 are defined there.
 7. **Read the Hop metadata format notes** (HOP-03, HOP-04 in Known Issues) before writing any Hop metadata JSON.
+
+**Milestone-specific rules (until E2E test is verified):**
+
+8. **Milestone first.** Complete the "First E2E Architecture Test" milestone (M.1–M.4) before anything else. This is a ~250-line task.
+9. **Hard stop after milestone.** After M.1–M.4 are done, STOP. Do not proceed to Airflow, Trino, or any other work. The user will manually test the pipeline and confirm before you continue.
+10. **Superset exception.** A minimal Superset (no OIDC, no Cube, just CH datasource + built-in admin login) is allowed for the milestone. Full Phase 3 Superset config (OIDC, RLS, Cube integration) is NOT.
 
 ---
 
