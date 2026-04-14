@@ -31,6 +31,11 @@ OAUTH_PROVIDERS = [
         "remote_app": {
             "client_id": os.environ.get("SUPERSET_KEYCLOAK_CLIENT_ID", "superset"),
             "client_secret": os.environ.get("SUPERSET_KEYCLOAK_SECRET", "superset-dev-secret"),
+            # OIDC auto-discovery (Authlib fetches jwks_uri, token endpoint, etc.)
+            "server_metadata_url": (
+                f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}"
+                "/.well-known/openid-configuration"
+            ),
             # Server-side: Superset backend → Keycloak (Docker internal network)
             "api_base_url": f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect",
             "access_token_url": f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token",
@@ -39,6 +44,7 @@ OAUTH_PROVIDERS = [
             "authorize_url": f"{KEYCLOAK_EXTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth",
             "client_kwargs": {
                 "scope": "openid profile email",
+                "token_endpoint_auth_method": "client_secret_post",
             },
         },
     }
@@ -79,3 +85,26 @@ class OpenInsightSecurityManager(SupersetSecurityManager):
 
 
 CUSTOM_SECURITY_MANAGER = OpenInsightSecurityManager
+
+# --- SSO Logout ---
+# Redirect to Keycloak's end_session_endpoint so the browser session is killed
+# in both Superset and Keycloak (true single sign-out).
+from urllib.parse import quote as _quote
+
+_SUPERSET_URL = os.environ.get("SUPERSET_URL", "http://localhost:8088")
+LOGOUT_REDIRECT_URL = (
+    f"{KEYCLOAK_EXTERNAL_URL}/realms/{KEYCLOAK_REALM}"
+    f"/protocol/openid-connect/logout"
+    f"?client_id={os.environ.get('SUPERSET_KEYCLOAK_CLIENT_ID', 'superset')}"
+    f"&post_logout_redirect_uri={_quote(_SUPERSET_URL)}"
+)
+
+# --- Feature flags ---
+FEATURE_FLAGS = {
+    "ENABLE_TEMPLATE_PROCESSING": True,
+}
+
+# --- CSRF / session hardening ---
+WTF_CSRF_ENABLED = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
