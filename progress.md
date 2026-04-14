@@ -1,6 +1,6 @@
 # OpenInsight — Implementation Progress
 
-> **Last updated:** 2026-04-08
+> **Last updated:** 2026-04-09 (validation refresh by Codex)
 > **Branch:** `main`
 > **Implementation target:** ARCHITECTURE.md (841 lines, single source of truth)
 
@@ -11,16 +11,52 @@
 | Phase | Description | Status | Progress |
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
-| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino | 🔄 In Progress | 3/5 tasks |
-| **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | ⏳ Next | 0/4 tasks (~250 lines) |
+| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | 🔄 In Progress | 3/5 tasks + OIDC |
+| **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | 🔄 Testing | 4/4 built, Superset→CH datasource manual step remaining |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
+
+---
+
+## Validation Refresh — 2026-04-09
+
+This refresh cross-checks the documented state against the live local environment and current repo contents without removing prior context.
+
+### Verified runtime state
+
+| Check | Result | Detail |
+|---|---|---|
+| `./scripts/check-health.sh` | ✅ | Core, pipeline, and app stacks all healthy |
+| Superset health endpoint | ✅ | `http://localhost:8088/health` returned `OK` |
+| Hop Web UI | ✅ | `http://localhost:8090/ui` served HTML successfully |
+| Superset admin user | ✅ | `admin` present in Superset metadata DB |
+| Kafka Engine tables + MVs | ✅ | `ingest_raw_transactions`, `ingest_raw_events`, `mv_sales_ingest`, `mv_events_ingest` exist in ClickHouse |
+| Current ClickHouse row counts | ✅ | `fct_sales = 56`, `fct_events = 32` |
+| Redpanda topics | ✅ | All expected topics present, including `ingest.raw.dimensions`, `ingest.raw.transactions`, `ingest.raw.events` |
+
+### Important correction to milestone status
+
+The runtime stack is healthy, but the sample Hop pipeline currently publishes to `ingest.raw.dimensions`, while the ClickHouse Kafka Engine tables consume `ingest.raw.transactions` and `ingest.raw.events`. That means the exact sales/events E2E path is not perfectly aligned yet even though the platform is up and the Kafka/ClickHouse streaming objects are active.
+
+### Documentation adjustments from this refresh
+
+- `M.1` is no longer "missing in code" because the Hop pipeline now includes a real `KafkaProducerOutput`.
+- `M.2` is complete in code and runtime because `seed.sh` applies `clickhouse-kafka-tables.sql`.
+- `M.3` is live: Superset is running, healthy, and initialized with a local `admin` user.
+- `M.4` is complete in code and runtime.
+- dbt still has an env-var naming mismatch: `.env.example` uses `CLICKHOUSE_*`, while `dbt/profiles.yml` expects `CH_*`.
+
+**Signed:** Codex
 
 ---
 
 ## Git Commits
 
 ```
+81a1363  chore: accept Hop's canonical project-config.json rewrite
+289b3f9  feat: add Apache Superset integration, update Hop pipeline for JSON Kafka production, and enable ClickHouse Kafka engine DDL application.
+a0b9486  Add progress.md directive to context files and dev server configurations
+984d432  Update progress.md: current state, Phase 3 guardrails, implementation plan
 ae8b616  Phase 2 progress: Kafka→CH DDL, dbt skeleton, Hop RDBMS connections
 f808f81  Fix Hop pipeline-run-configuration schema for Hop 2.10
 2e4542e  Phase 1 complete + Phase 2 start: Keycloak role matrix and Apache Hop Web
@@ -125,7 +161,7 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 2.1 | Apache Hop | ✅ Done | Hop Web running at :8090, project + env + RDBMS connections configured |
-| 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs (not yet applied to running CH) |
+| 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs present in running ClickHouse; `seed.sh` auto-applies the DDL |
 | 2.3 | dbt Project | ✅ Done | Skeleton committed: staging views, mart tables, profiles.yml (not yet run) |
 | 2.4 | Airflow | ⏳ Pending | Next |
 | 2.5 | Trino | ⏳ Pending | After Airflow |
@@ -149,7 +185,7 @@ hop/projects/openinsight/
 │       ├── openinsight-postgres.json    # PG connection (uses env vars)
 │       └── openinsight-clickhouse.json  # CH connection (uses env vars)
 └── pipelines/
-    └── sample-ingest-to-kafka.hpl   # Sample: PG customers → log output
+    └── sample-ingest-to-kafka.hpl   # Sample: PG customers → JSON → Kafka (`ingest.raw.dimensions`)
 ```
 
 #### RDBMS Connection Metadata Format (Hop 2.10)
@@ -169,7 +205,7 @@ Hop serializes database connections as:
 ```
 Plugin types confirmed via bytecode: `POSTGRESQL` (`PostgreSqlDatabaseMeta`), `CLICKHOUSE` (`ClickhouseDatabaseMeta`).
 
-### 2.2 Kafka→ClickHouse ✅ DDL Ready
+### 2.2 Kafka→ClickHouse ✅ Applied In Dev
 
 **File:** `scripts/clickhouse-kafka-tables.sql`
 
@@ -180,7 +216,7 @@ Creates two Kafka Engine tables pointing at Redpanda, with materialized views in
 | `ingest_raw_transactions` | `ingest.raw.transactions` | `fct_sales` |
 | `ingest_raw_events` | `ingest.raw.events` | `fct_events` |
 
-**Not yet applied** — run manually via CH HTTP API or integrate into seed.sh when ready.
+**Status update (2026-04-09):** applied in the current dev environment and auto-applied by `seed.sh`.
 
 ### 2.3 dbt Project ✅ Skeleton Ready
 
@@ -211,12 +247,27 @@ dbt/
 
 | # | Task | Status | ~Lines | Notes |
 |---|---|---|---|---|
-| M.1 | Hop pipeline (PG → Kafka) | ✅ | ~140 | `.hpl` patched: WriteToLog replaced with JSON output → Kafka Producer |
+| M.1 | Hop pipeline (PG → Kafka) | ⚠️ Partial | ~140 | `.hpl` patched: WriteToLog replaced with JSON output → Kafka Producer. Current sample writes to `ingest.raw.dimensions`, not the `ingest.raw.transactions` / `ingest.raw.events` topics consumed by the existing ClickHouse Kafka Engine tables |
 | M.2 | Apply Kafka Engine DDL | ✅ | ~15 | `seed.sh` now auto-applies `clickhouse-kafka-tables.sql` |
-| M.3 | Minimal Superset | ✅ | ~80 | docker-compose `app` profile + `superset_config.py` + `init-superset.sh` |
+| M.3 | Minimal Superset | ✅ | ~80 | docker-compose `app` profile + `superset_config.py` + `init-superset.sh`. Fixed: added healthcheck, removed non-existent `superset set_database_uri` CLI command (same bug as REVIEW-01), replaced with UI instructions |
 | M.4 | Health check + env | ✅ | ~11 | `check-health.sh` + `.env.example` updated |
 
 **Total: ~250 lines of config/code (XML, YAML, Python, Shell)**
+
+### Test Results (2026-04-08)
+
+| Test | Result | Detail |
+|------|--------|--------|
+| Core stack (6 services) | ✅ | PG, CH, Keycloak, Redis, Redpanda, Console all healthy |
+| Seed data | ✅ | Current verified counts: CH `fct_sales = 56`, CH `fct_events = 32` |
+| Kafka Engine DDL applied | ✅ | `ingest_raw_transactions`, `ingest_raw_events` + 2 MVs created |
+| Kafka→CH streaming ingest | ✅ | Test message produced to `ingest.raw.transactions` → `sale_id=9999` landed in `fct_sales` in <4s |
+| Keycloak JWT claims | ✅ | carol.engineering: `roles=[data-analyst, data-engineer]`, `groups=[Engineering]`, `client_roles=[cube-admin]` |
+| Hop Web | ✅ | UI at :8090, project loads, connections visible |
+| Superset | ✅ | UI at :8088 healthy, db migrated, admin user present, `clickhouse-connect` driver installed |
+| Superset → ClickHouse | ⏳ | Awaiting manual: add datasource via UI, then create a chart from `fct_sales` |
+
+**Note:** Tomcat on the host was binding port 8080, blocking Keycloak — killed to proceed. If Tomcat runs on your machine, either stop it first or remap Keycloak's port in `.env`.
 
 ### What is NOT needed for this milestone
 - ❌ Airflow (trigger Hop pipeline manually from Hop Web UI)
@@ -236,19 +287,78 @@ dbt/
 8. Open Superset (http://localhost:8088), log in as admin, add ClickHouse datasource
 9. Create a simple chart from `fct_sales` — **if this works, architecture is validated**
 
-### After verification: resume Phase 2 (Airflow, Trino, dbt run) then Phase 3
+### After verification: resume implementation in the order below
+
+---
+
+## Architectural Directives (from project review, 2026-04-08)
+
+### Directive 1: Keycloak must be wired into every web UI before adding new components
+
+> "Every day a component runs with its own auth is a day where the centralized identity architecture exists on paper only."
+
+Keycloak was the first thing built. It has 3 OIDC clients, 6 users, client-specific roles, group-based inheritance, and verified JWT claims. Yet every running application ignores it. **Superset → Keycloak OIDC is the immediate next action after Phase 2 completion.**
+
+### Directive 2: Finish Phase 2 completely before any Phase 3 work
+
+The implementation sequence is non-negotiable:
+1. dbt run (validate transformation layer)
+2. Airflow + DAGs (automated orchestration for Hop + dbt)
+3. Trino (federated query layer — Cube depends on this)
+4. Superset → Keycloak OIDC (centralized auth)
+5. Cube (semantic layer, requires Trino)
+6. RLS (requires Cube + Keycloak JWT groups)
+
+### Directive 3: Hop vs Airbyte — decision framework
+
+**Current decision: Keep Hop for internal sources and visual orchestration. dbt does all T. Evaluate Airbyte when external sources are onboarded.**
+
+| Concern | Hop | Airbyte |
+|---------|-----|---------|
+| Visual pipeline design | ✅ Core strength | ❌ Not its purpose |
+| Connector breadth | ~50 | 300+ |
+| EL from external sources | Limited | ✅ Core strength |
+| Custom transforms | ✅ Rich transform library | ❌ EL only |
+| dbt overlap | Yes — Hop's T overlaps dbt's T | No — clean EL + T separation |
+
+**Rule: Hop does E+L for internal sources (PG, CH, Kafka). dbt does ALL transformations. No double-transforming. If/when external sources arrive (Salesforce, Stripe, S3), evaluate Airbyte at that point.**
+
+### Known gaps flagged in review
+
+| Gap | Detail | Fix |
+|-----|--------|-----|
+| Hop pipeline targets wrong topic | Pipeline writes to `ingest.raw.dimensions`, but Kafka Engine tables consume `ingest.raw.transactions` and `ingest.raw.events`. Full chain (Hop→Kafka→CH) never tested automatically. | Create a second Hop pipeline writing to `ingest.raw.transactions` to complete the loop, or add a third Kafka Engine table for `ingest.raw.dimensions` |
+| dbt env var naming mismatch | `.env.example` uses `CLICKHOUSE_*`/`POSTGRES_*`, Hop uses `PG_*`/`CH_*`, dbt uses `CH_NATIVE_PORT`. First `dbt run` will fail. | Standardize on `PG_*`/`CH_*` for app-level vars; keep `POSTGRES_*`/`CLICKHOUSE_*` for docker-compose only |
+
+### Maintainer signature
+
+Validation refresh appended on 2026-04-09 by **Codex**.
+
+---
+
+## Recommended Priority Order (4-week plan)
+
+| # | Task | Est. | Phase |
+|---|------|------|-------|
+| 1 | Run dbt models — validate transformation layer | 1 day | Phase 2 |
+| 2 | Fix env var naming alignment (dbt, Hop, .env) | 0.5 day | Phase 2 |
+| 3 | Deploy Airflow with DAGs for Hop + dbt | 1 week | Phase 2 |
+| 4 | Deploy Trino with CH + PG catalogs | 3 days | Phase 2 |
+| 5 | Wire Superset → Keycloak OIDC | 2 days | Phase 2→3 bridge |
+| 6 | Deploy Cube in dev mode against ClickHouse | 1 week | Phase 3 |
+| 7 | Implement basic RLS in Cube using Keycloak JWT groups | 3 days | Phase 3 |
 
 ---
 
 ## Remaining Phase 2 Work — Implementation Plan
 
-See detailed plan below in "Next Steps for Implementation Agent" section.
+See detailed task specs below in "Next Steps for Implementation Agent" section.
 
 ---
 
 ## Phase 3: Semantic & Visualization ⏳ PENDING
 
-**DO NOT START Phase 3 until Phase 2 is verified end-to-end.**
+**DO NOT START Phase 3 until Phase 2 is verified end-to-end AND Superset→Keycloak OIDC is working.**
 
 | # | Task | Notes |
 |---|---|---|
@@ -317,6 +427,12 @@ See detailed plan below in "Next Steps for Implementation Agent" section.
 | HOP-03 | `pipeline-run-configuration/local.json` wrong schema | Plugin ID is the key under `engineRunConfiguration`, not a nested field |
 | HOP-04 | `rdbms-connection/*.json` schema | Plugin type (e.g. `POSTGRESQL`) is the key under `"rdbms"`, not `"databaseType"` |
 | REVIEW-01 | Phase 3 code dropped from other agent | Superset config used wrong auth type, Cube connection URI was incorrect, services added without testing. Dropped; guardrails documented above. |
+| REVIEW-02 | M.1 pipeline had empty `<connection/>` | Agent left Table Input with no DB connection. Fixed to `<connection>openinsight-postgres</connection>` |
+| REVIEW-03 | M.1 pipeline XML minified | Agent appended JSON output + Kafka Producer as single-line XML. Fixed to proper indentation |
+| REVIEW-04 | M.3 Superset had no healthcheck | Agent omitted healthcheck despite rule #3 (follow existing patterns). Fixed: added `curl -sf http://localhost:8088/health` |
+| REVIEW-05 | M.3 `init-superset.sh` used `superset set_database_uri` | CLI command doesn't exist in Superset 3.x — same class of bug as REVIEW-01. Replaced with manual UI instructions |
+| HOP-05 | Hop rewrites `project-config.json` on startup | Removes `config_version`, `enforcingExecutionInHome`, `variables:[]`; renames `parentProjectReferenceName`→`parentProjectName`. Committed canonical version at `81a1363` |
+| ENV-01 | Tomcat (Homebrew) on host binds port 8080 | Conflicts with Keycloak. Kill Tomcat or remap `KEYCLOAK_PORT` in `.env` before starting |
 
 ---
 
@@ -324,7 +440,7 @@ See detailed plan below in "Next Steps for Implementation Agent" section.
 
 | ADR | Decision | Implementation |
 |---|---|---|
-| ADR-001 | Kafka as message backbone | Redpanda running + Kafka Engine DDL ready |
+| ADR-001 | Kafka as message backbone | ✅ Proven: Redpanda → Kafka Engine → MV → fct_sales in <4s |
 | ADR-002 | Redis for Cube cache | Redis 7 with LRU eviction running; pub/sub pending Phase 3 |
 | ADR-007 | Event-driven cache invalidation | `keycloak.events` topic created; listener pending Phase 3 |
 | ADR-009 | Namespace isolation | Docker network `openinsight`; K8s NetworkPolicies deferred |
@@ -370,25 +486,29 @@ docker compose exec -T redpanda rpk topic list
 
 ## Next Steps for Implementation Agent
 
-### Priority: Complete the 🛑 E2E Milestone FIRST, then tasks 2.4 and 2.5
+### Priority Order (STRICT — follow this sequence exactly)
+
+1. Fix env var naming alignment (PG_*, CH_* standard)
+2. Run dbt models — verify transformation layer
+3. Deploy Airflow with DAGs for Hop + dbt (task 2.4)
+4. Deploy Trino with CH + PG catalogs (task 2.5)
+5. Wire Superset → Keycloak OIDC (~30 lines in superset_config.py)
+6. **STOP — Phase 2 complete. Report back for Phase 3 review.**
 
 ### RULES FOR THE IMPLEMENTATION AGENT
 
 **Permanent rules (apply to all phases):**
 
-1. **Stay in Phase 2.** Do not create Phase 3 files (Cube, API Gateway, full Superset OIDC). They will be designed and reviewed separately.
-2. **Test before committing.** Every service added to docker-compose must start healthy before being committed. Run `./scripts/check-health.sh` after changes.
-3. **Follow existing patterns.** Look at how `hop-web` was added to docker-compose.yml — same structure: `profiles`, `depends_on` with `condition: service_healthy`, healthcheck, `restart: unless-stopped`.
-4. **Use environment variables.** Never hardcode credentials in config files. Use `${VAR:-default}` in docker-compose and env var functions in application configs.
-5. **One concern per commit.** Don't bundle Airflow + Trino + dbt tests in one commit.
-6. **Read ARCHITECTURE.md Section 9** (Phased Implementation Plan) before starting. Tasks 2.4 and 2.5 are defined there.
-7. **Read the Hop metadata format notes** (HOP-03, HOP-04 in Known Issues) before writing any Hop metadata JSON.
-
-**Milestone-specific rules (until E2E test is verified):**
-
-8. **Milestone first.** Complete the "First E2E Architecture Test" milestone (M.1–M.4) before anything else. This is a ~250-line task.
-9. **Hard stop after milestone.** After M.1–M.4 are done, STOP. Do not proceed to Airflow, Trino, or any other work. The user will manually test the pipeline and confirm before you continue.
-10. **Superset exception.** A minimal Superset (no OIDC, no Cube, just CH datasource + built-in admin login) is allowed for the milestone. Full Phase 3 Superset config (OIDC, RLS, Cube integration) is NOT.
+1. **Follow the priority order above.** Do not skip steps or reorder. Each step builds on the previous.
+2. **Read the Architectural Directives section** before starting any work. Those are non-negotiable project decisions.
+3. **Test before committing.** Every service added to docker-compose must start healthy before being committed. Run `./scripts/check-health.sh` after changes.
+4. **Follow existing patterns.** Look at how `hop-web` was added to docker-compose.yml — same structure: `profiles`, `depends_on` with `condition: service_healthy`, healthcheck, `restart: unless-stopped`.
+5. **Use environment variables.** Never hardcode credentials in config files. Use `${VAR:-default}` in docker-compose and env var functions in application configs. Standardize on `PG_*`/`CH_*` for app-level vars.
+6. **One concern per commit.** Don't bundle Airflow + Trino + dbt tests in one commit.
+7. **Read ARCHITECTURE.md Section 9** (Phased Implementation Plan) before starting. Tasks 2.4 and 2.5 are defined there.
+8. **Read the Hop metadata format notes** (HOP-03, HOP-04 in Known Issues) before writing any Hop metadata JSON.
+9. **Hop does E+L only. dbt does ALL transformations.** Do not add transformation logic to Hop pipelines. Keep them as extract-load pipes.
+10. **Keycloak is mandatory for every web UI.** Superset OIDC must be wired before declaring Phase 2 done. Use `AUTH_OAUTH` (NOT `AUTH_OID`). The `superset` OIDC client is already configured in `keycloak/realm-openinsight.json`.
 
 ---
 

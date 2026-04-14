@@ -149,13 +149,13 @@ ORDER BY c.id</sql>
         <currency/>
         <decimal/>
         <set_empty_string>N</set_empty_string>
-        <format>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</format>
+        <format/>
         <length>-1</length>
         <name>ingested_at</name>
         <precision>-1</precision>
-        <type>Timestamp</type>
+        <type>String</type>
         <group/>
-        <nullif>NOW</nullif>
+        <nullif>${Internal.Entry.Current.Datetime}</nullif>
       </field>
       <field>
         <currency/>
