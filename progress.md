@@ -11,7 +11,7 @@
 | Phase | Description | Status | Progress |
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
-| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | 🔄 In Progress | 4/5 tasks + OIDC |
+| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | ✅ Complete | 5/5 tasks + OIDC |
 | **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | 🔄 Testing | 4/4 built, Superset→CH datasource manual step remaining |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
@@ -164,7 +164,7 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 | 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs present in running ClickHouse; `seed.sh` auto-applies the DDL |
 | 2.3 | dbt Project | ✅ Done | Skeleton committed: staging views, mart tables, profiles.yml (not yet run) |
 | 2.4 | Airflow | ✅ Done | LocalExecutor at :8081, dag_hop_ingest + dag_dbt_transform scaffolds loaded (see 2.4 below) |
-| 2.5 | Trino | ⏳ Pending | Next |
+| 2.5 | Trino | ✅ Done | Trino 435 at :8085, clickhouse + postgresql catalogs, federated join verified (see 2.5 below) |
 
 ### 2.1 Apache Hop Web ✅ Done
 
@@ -256,6 +256,27 @@ Both DAGs load with zero import errors (`airflow dags list-import-errors` return
 #### Verification
 - Health check: `./scripts/check-health.sh` reports "Airflow (:8081) OK".
 - DAG list: `docker exec openinsight-airflow airflow dags list` shows both DAGs paused.
+
+---
+
+### 2.5 Trino ✅ Done
+
+**Started with:** `docker compose --profile app up -d trino`
+**URL:** http://localhost:8085
+**Image:** `trinodb/trino:435`
+**Catalogs:** `clickhouse`, `postgresql`, `system` (auto-registered from `trino/etc/catalog/*.properties`)
+
+#### Connector configuration
+- `trino/etc/catalog/clickhouse.properties` — points at `clickhouse:8123/openinsight`; `clickhouse.map-string-as-varchar=true` (returns ClickHouse `String` as UTF-8 `varchar` instead of `varbinary`)
+- `trino/etc/catalog/postgresql.properties` — points at `postgres:5432/openinsight`
+
+#### Verification
+- `SHOW CATALOGS` returns `clickhouse`, `postgresql`, `system`
+- `SELECT count(*) FROM clickhouse.openinsight.fct_sales` → 56
+- `SELECT count(*) FROM clickhouse.openinsight.fct_events` → 32
+- `SELECT count(*) FROM postgresql.public.customers` → 30
+- Federated join (fct_sales × customers) returns revenue-by-customer, region codes as strings (`NA`, `EU`, `MEA`, `APAC`)
+- Health check: `./scripts/check-health.sh` reports "Trino (:8085) OK"
 
 ---
 

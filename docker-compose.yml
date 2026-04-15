@@ -228,6 +228,30 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Trino — Query federation across ClickHouse + PostgreSQL (App profile)
+  # ---------------------------------------------------------------------------
+  trino:
+    image: trinodb/trino:435
+    container_name: openinsight-trino
+    profiles: ["app"]
+    ports:
+      - "${TRINO_PORT:-8085}:8080"
+    volumes:
+      - ./trino/etc:/etc/trino:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Superset — Visualization (App profile, Keycloak OIDC)
   # Custom build adds clickhouse-connect + Authlib on top of official image
   # ---------------------------------------------------------------------------

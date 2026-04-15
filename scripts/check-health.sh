@@ -71,11 +71,18 @@ fi
 
 # --- App profile services (conditional) ---
 SUPERSET_PORT="${SUPERSET_PORT:-8088}"
-if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'superset'; then
+TRINO_PORT="${TRINO_PORT:-8085}"
+if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -qE 'superset|trino'; then
     echo ""
     echo "--- App Stack ---"
-    check_service "Superset (:$SUPERSET_PORT)" \
-        "curl -sf http://localhost:${SUPERSET_PORT}/health"
+    if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'superset'; then
+        check_service "Superset (:$SUPERSET_PORT)" \
+            "curl -sf http://localhost:${SUPERSET_PORT}/health"
+    fi
+    if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'trino'; then
+        check_service "Trino (:$TRINO_PORT)" \
+            "curl -sf http://localhost:${TRINO_PORT}/v1/info | grep -q '\"starting\":false'"
+    fi
 fi
 
 echo ""
