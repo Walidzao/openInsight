@@ -94,22 +94,31 @@
     {
       "name": "Finance",
       "path": "/Finance",
-      "realmRoles": ["data-analyst"]
+      "realmRoles": [
+        "data-analyst"
+      ]
     },
     {
       "name": "HR",
       "path": "/HR",
-      "realmRoles": ["data-analyst"]
+      "realmRoles": [
+        "data-analyst"
+      ]
     },
     {
       "name": "Engineering",
       "path": "/Engineering",
-      "realmRoles": ["data-engineer", "data-analyst"]
+      "realmRoles": [
+        "data-engineer",
+        "data-analyst"
+      ]
     },
     {
       "name": "Executive",
       "path": "/Executive",
-      "realmRoles": ["admin"]
+      "realmRoles": [
+        "admin"
+      ]
     }
   ],
   "clients": [
@@ -128,8 +137,12 @@
       "authorizationServicesEnabled": false,
       "rootUrl": "http://localhost:8088",
       "baseUrl": "/",
-      "redirectUris": ["http://localhost:8088/*"],
-      "webOrigins": ["http://localhost:8088"],
+      "redirectUris": [
+        "http://localhost:8088/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8088"
+      ],
       "protocolMappers": [
         {
           "name": "groups",
@@ -185,8 +198,12 @@
       "authorizationServicesEnabled": false,
       "rootUrl": "http://localhost:4000",
       "baseUrl": "/",
-      "redirectUris": ["http://localhost:4000/*"],
-      "webOrigins": ["http://localhost:4000"],
+      "redirectUris": [
+        "http://localhost:4000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000"
+      ],
       "protocolMappers": [
         {
           "name": "groups",
@@ -242,8 +259,12 @@
       "authorizationServicesEnabled": false,
       "rootUrl": "http://localhost:8081",
       "baseUrl": "/",
-      "redirectUris": ["http://localhost:8081/*"],
-      "webOrigins": ["http://localhost:8081"],
+      "redirectUris": [
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8081"
+      ],
       "protocolMappers": [
         {
           "name": "groups",
@@ -341,11 +362,19 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["admin"],
+      "realmRoles": [
+        "admin"
+      ],
       "clientRoles": {
-        "superset": ["superset-admin"],
-        "cube": ["cube-admin"],
-        "airflow": ["airflow-admin"]
+        "superset": [
+          "superset-admin"
+        ],
+        "cube": [
+          "cube-admin"
+        ],
+        "airflow": [
+          "airflow-admin"
+        ]
       }
     },
     {
@@ -362,10 +391,16 @@
           "temporary": false
         }
       ],
-      "groups": ["/Finance"],
+      "groups": [
+        "/Finance"
+      ],
       "clientRoles": {
-        "superset": ["superset-alpha"],
-        "cube": ["cube-query"]
+        "superset": [
+          "superset-alpha"
+        ],
+        "cube": [
+          "cube-query"
+        ]
       }
     },
     {
@@ -382,10 +417,16 @@
           "temporary": false
         }
       ],
-      "groups": ["/HR"],
+      "groups": [
+        "/HR"
+      ],
       "clientRoles": {
-        "superset": ["superset-alpha"],
-        "cube": ["cube-query"]
+        "superset": [
+          "superset-alpha"
+        ],
+        "cube": [
+          "cube-query"
+        ]
       }
     },
     {
@@ -402,11 +443,19 @@
           "temporary": false
         }
       ],
-      "groups": ["/Engineering"],
+      "groups": [
+        "/Engineering"
+      ],
       "clientRoles": {
-        "superset": ["superset-alpha"],
-        "cube": ["cube-admin"],
-        "airflow": ["airflow-trigger"]
+        "superset": [
+          "superset-alpha"
+        ],
+        "cube": [
+          "cube-admin"
+        ],
+        "airflow": [
+          "airflow-trigger"
+        ]
       }
     },
     {
@@ -423,11 +472,19 @@
           "temporary": false
         }
       ],
-      "groups": ["/Executive"],
+      "groups": [
+        "/Executive"
+      ],
       "clientRoles": {
-        "superset": ["superset-admin"],
-        "cube": ["cube-admin"],
-        "airflow": ["airflow-viewer"]
+        "superset": [
+          "superset-admin"
+        ],
+        "cube": [
+          "cube-admin"
+        ],
+        "airflow": [
+          "airflow-viewer"
+        ]
       }
     },
     {
@@ -444,11 +501,19 @@
           "temporary": false
         }
       ],
-      "groups": ["/Finance"],
-      "realmRoles": ["viewer"],
+      "groups": [
+        "/Finance"
+      ],
+      "realmRoles": [
+        "viewer"
+      ],
       "clientRoles": {
-        "superset": ["superset-gamma"],
-        "cube": ["cube-query"]
+        "superset": [
+          "superset-gamma"
+        ],
+        "cube": [
+          "cube-query"
+        ]
       }
     }
   ],
@@ -563,14 +628,26 @@
       ]
     }
   ],
-  "defaultDefaultClientScopes": ["openid", "profile", "email", "roles"],
-  "defaultOptionalClientScopes": ["offline_access"],
+  "defaultDefaultClientScopes": [
+    "openid",
+    "profile",
+    "email",
+    "roles"
+  ],
+  "defaultOptionalClientScopes": [
+    "offline_access"
+  ],
   "smtpServer": {},
   "internationalizationEnabled": false,
   "supportedLocales": [],
   "defaultLocale": "en",
   "eventsEnabled": true,
-  "eventsListeners": ["jboss-logging"],
+  "eventsListeners": [
+    "jboss-logging"
+  ],
   "adminEventsEnabled": true,
-  "adminEventsDetailsEnabled": true
+  "adminEventsDetailsEnabled": true,
+  "attributes": {
+    "frontendUrl": "http://localhost:8080"
+  }
 }

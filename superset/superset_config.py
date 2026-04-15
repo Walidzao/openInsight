@@ -45,6 +45,17 @@ OAUTH_PROVIDERS = [
             "client_kwargs": {
                 "scope": "openid profile email",
                 "token_endpoint_auth_method": "client_secret_post",
+                # Keycloak issues tokens with iss=<browser URL> (localhost:8080)
+                # but Superset's backend fetches discovery from keycloak:8080
+                # (internal Docker hostname) — the two differ. Accept both issuers.
+                "claims_options": {
+                    "iss": {
+                        "values": [
+                            f"{KEYCLOAK_EXTERNAL_URL}/realms/{KEYCLOAK_REALM}",
+                            f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}",
+                        ]
+                    }
+                },
             },
         },
     }
