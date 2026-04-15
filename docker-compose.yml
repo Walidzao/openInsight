@@ -152,6 +152,16 @@ services:
       KAFKA_BROKERS: redpanda:9092
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
       KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+      # Keycloak OIDC login (Redpanda Console OSS v2.4 login feature)
+      # See: https://docs.redpanda.com/current/console/config/
+      LOGIN_ENABLED: "true"
+      LOGIN_JWTSECRET: ${REDPANDA_CONSOLE_JWT_SECRET:-redpanda-console-jwt-dev-secret}
+      LOGIN_OIDC_ENABLED: "true"
+      LOGIN_OIDC_CLIENTID: redpanda-console
+      LOGIN_OIDC_CLIENTSECRET: ${REDPANDA_CONSOLE_OIDC_SECRET:-redpanda-console-dev-secret}
+      LOGIN_OIDC_ISSUERURL: http://keycloak:8080/realms/openinsight
+      LOGIN_OIDC_REDIRECTURL: http://localhost:${REDPANDA_CONSOLE_PORT:-8888}/auth/callbacks/oidc
+      LOGIN_OIDC_USERIDENTIFYINGCLAIMKEY: preferred_username
     depends_on:
       redpanda:
         condition: service_healthy
@@ -195,7 +205,10 @@ services:
   # Metadata DB: PostgreSQL `airflow` database (created by init-postgres.sh)
   # ---------------------------------------------------------------------------
   airflow:
-    image: apache/airflow:2.8.4-python3.11
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: openinsight-airflow:latest
     container_name: openinsight-airflow
     profiles: ["pipeline"]
     ports:
@@ -209,8 +222,15 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-openinsight-airflow-dev-secret}
       AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
       AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      # Keycloak OIDC (same dual-URL pattern as Superset)
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_EXTERNAL_URL: http://localhost:${KEYCLOAK_PORT:-8080}
+      KEYCLOAK_REALM: openinsight
+      AIRFLOW_KEYCLOAK_CLIENT_ID: airflow
+      AIRFLOW_KEYCLOAK_SECRET: ${AIRFLOW_KEYCLOAK_SECRET:-airflow-dev-secret}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
       - ./scripts/airflow-entrypoint.sh:/opt/airflow/entrypoint.sh:ro
       - airflow_logs:/opt/airflow/logs
       - /var/run/docker.sock:/var/run/docker.sock

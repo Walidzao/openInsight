@@ -66,12 +66,19 @@ AUTH_USER_REGISTRATION = True
 AUTH_USER_REGISTRATION_ROLE = "Public"
 AUTH_ROLES_SYNC_AT_LOGIN = True
 
-# Map Keycloak client_roles → Superset roles
-# Keycloak client roles are defined in realm-openinsight.json under the superset client
+# Map Keycloak client_roles + group names → Superset roles
+# client_roles: defined in realm-openinsight.json under the superset client
+# group names: come from the Keycloak "groups" claim (group membership mapper)
 AUTH_ROLES_MAPPING = {
+    # Functional roles (from Keycloak client roles)
     "superset-admin": ["Admin"],
     "superset-alpha": ["Alpha"],
     "superset-gamma": ["Gamma"],
+    # Group-based RLS roles — each grants a row-level filter on fct_sales / fct_events
+    "Finance": ["Finance_RLS"],
+    "HR": ["HR_RLS"],
+    "Engineering": ["Engineering_RLS"],
+    "Executive": ["Executive_RLS"],
 }
 
 
@@ -85,12 +92,17 @@ class OpenInsightSecurityManager(SupersetSecurityManager):
             )
             me.raise_for_status()
             data = me.json()
+            # Combine client roles (superset-alpha, superset-gamma, etc.) with
+            # group memberships (Finance, HR, Engineering) so AUTH_ROLES_MAPPING
+            # can assign both functional roles AND group-scoped RLS roles.
+            client_roles = data.get("client_roles", [])
+            groups = data.get("groups", [])
             return {
                 "username": data.get("preferred_username", ""),
                 "first_name": data.get("given_name", ""),
                 "last_name": data.get("family_name", ""),
                 "email": data.get("email", ""),
-                "role_keys": data.get("client_roles", []),
+                "role_keys": client_roles + groups,
             }
         return {}
 
@@ -113,6 +125,7 @@ LOGOUT_REDIRECT_URL = (
 # --- Feature flags ---
 FEATURE_FLAGS = {
     "ENABLE_TEMPLATE_PROCESSING": True,
+    "ROW_LEVEL_SECURITY": True,
 }
 
 # --- CSRF / session hardening ---
