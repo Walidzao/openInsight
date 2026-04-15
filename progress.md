@@ -11,7 +11,7 @@
 | Phase | Description | Status | Progress |
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
-| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | 🔄 In Progress | 3/5 tasks + OIDC |
+| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | 🔄 In Progress | 4/5 tasks + OIDC |
 | **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | 🔄 Testing | 4/4 built, Superset→CH datasource manual step remaining |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
@@ -163,8 +163,8 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 | 2.1 | Apache Hop | ✅ Done | Hop Web running at :8090, project + env + RDBMS connections configured |
 | 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs present in running ClickHouse; `seed.sh` auto-applies the DDL |
 | 2.3 | dbt Project | ✅ Done | Skeleton committed: staging views, mart tables, profiles.yml (not yet run) |
-| 2.4 | Airflow | ⏳ Pending | Next |
-| 2.5 | Trino | ⏳ Pending | After Airflow |
+| 2.4 | Airflow | ✅ Done | LocalExecutor at :8081, dag_hop_ingest + dag_dbt_transform scaffolds loaded (see 2.4 below) |
+| 2.5 | Trino | ⏳ Pending | Next |
 
 ### 2.1 Apache Hop Web ✅ Done
 
@@ -236,6 +236,26 @@ dbt/
 **Design decision:** `dim_customers.sql` uses ClickHouse's built-in `postgresql()` table function to pull dimension data from PG directly, avoiding Trino for local dev. Credentials are parameterized via dbt `var()` with env var fallbacks.
 
 **Not yet run** — requires `pip install dbt-clickhouse` and `dbt run`.
+
+---
+
+### 2.4 Apache Airflow ✅ Done
+
+**Started with:** `docker compose --profile pipeline up -d airflow`
+**URL:** http://localhost:8081 (login: `admin` / `admin`)
+**Image:** `apache/airflow:2.8.4-python3.11`
+**Executor:** `LocalExecutor` (scheduler + webserver co-located in one container via `scripts/airflow-entrypoint.sh`)
+**Metadata DB:** PostgreSQL `airflow` database (pre-created by `scripts/init-postgres.sh`)
+
+#### DAGs
+- `dag_hop_ingest.py` — Triggers `sample-ingest-to-kafka.hpl` via `docker exec openinsight-hop-web hop-run.sh`. `schedule=None`, manual trigger.
+- `dag_dbt_transform.py` — Placeholder `dbt run` + `dbt test` tasks. Will be wired once dbt is containerised or mounted into Airflow.
+
+Both DAGs load with zero import errors (`airflow dags list-import-errors` returns "No data found"). `dag_dbt_transform` verified end-to-end via `airflow dags test` — both tasks succeed.
+
+#### Verification
+- Health check: `./scripts/check-health.sh` reports "Airflow (:8081) OK".
+- DAG list: `docker exec openinsight-airflow airflow dags list` shows both DAGs paused.
 
 ---
 

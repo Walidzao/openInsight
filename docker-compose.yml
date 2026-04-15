@@ -190,6 +190,44 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Airflow — Workflow orchestration (Pipeline profile)
+  # LocalExecutor; scheduler + webserver co-located via airflow-entrypoint.sh
+  # Metadata DB: PostgreSQL `airflow` database (created by init-postgres.sh)
+  # ---------------------------------------------------------------------------
+  airflow:
+    image: apache/airflow:2.8.4-python3.11
+    container_name: openinsight-airflow
+    profiles: ["pipeline"]
+    ports:
+      - "${AIRFLOW_PORT:-8081}:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-openinsight}:${POSTGRES_PASSWORD:-openinsight_dev}@postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-openinsight-airflow-dev-secret}
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./scripts/airflow-entrypoint.sh:/opt/airflow/entrypoint.sh:ro
+      - airflow_logs:/opt/airflow/logs
+    command: ["bash", "/opt/airflow/entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health | grep -q '\"status\": \"healthy\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Superset — Visualization (App profile, Keycloak OIDC)
   # Custom build adds clickhouse-connect + Authlib on top of official image
   # ---------------------------------------------------------------------------
@@ -233,6 +271,8 @@ volumes:
   redis_data:
     driver: local
   redpanda_data:
+    driver: local
+  airflow_logs:
     driver: local
 
 networks:

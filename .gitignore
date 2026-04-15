@@ -44,6 +44,7 @@ target/
 dbt_packages/
 logs/
 dbt_modules/
+.user.yml
 
 # Cube
 .cubestore/

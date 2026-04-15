@@ -55,11 +55,18 @@ check_service "Redpanda Console (:${REDPANDA_CONSOLE_PORT:-8888})" \
 
 # --- Pipeline profile services (conditional) ---
 HOP_WEB_PORT="${HOP_WEB_PORT:-8090}"
-if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'hop-web'; then
+AIRFLOW_PORT="${AIRFLOW_PORT:-8081}"
+if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -qE 'hop-web|airflow'; then
     echo ""
     echo "--- Pipeline Stack ---"
-    check_service "Hop Web (:$HOP_WEB_PORT)" \
-        "curl -sf http://localhost:${HOP_WEB_PORT}/ui"
+    if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'hop-web'; then
+        check_service "Hop Web (:$HOP_WEB_PORT)" \
+            "curl -sf http://localhost:${HOP_WEB_PORT}/ui"
+    fi
+    if docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --format '{{.Names}}' 2>/dev/null | grep -q 'airflow'; then
+        check_service "Airflow (:$AIRFLOW_PORT)" \
+            "curl -sf http://localhost:${AIRFLOW_PORT}/health | grep -q '\"status\": \"healthy\"'"
+    fi
 fi
 
 # --- App profile services (conditional) ---
