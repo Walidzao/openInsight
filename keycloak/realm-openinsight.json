@@ -196,6 +196,8 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
       "rootUrl": "http://localhost:4000",
       "baseUrl": "/",
       "redirectUris": [
@@ -257,6 +259,8 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
       "rootUrl": "http://localhost:8081",
       "baseUrl": "/",
       "redirectUris": [
