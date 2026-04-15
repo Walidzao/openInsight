@@ -24,8 +24,39 @@ docker compose exec -T superset superset fab create-admin \
 echo "[3/4] Initializing roles and permissions..."
 docker compose exec -T superset superset init
 
+# Patch Alpha role: add SQL Lab + TabStateView permissions missing after superset init
+echo "[4/5] Patching Alpha role with full SQL Lab permissions..."
+docker compose exec -T superset python -c "
+from superset.app import create_app
+app = create_app()
+with app.app_context():
+    from superset.extensions import db as sa_db
+    from flask_appbuilder.models.sqla.interface import SQLAInterface
+    from flask_appbuilder.security.sqla.models import (
+        Role, PermissionView, ViewMenu, Permission
+    )
+    alpha = sa_db.session.query(Role).filter_by(name='Alpha').first()
+    if not alpha:
+        print('  Alpha role not found — skipping.')
+    else:
+        target_views = ['TabStateView', 'SQLLab', 'SqlLab', 'SQL Lab']
+        pvs = (
+            sa_db.session.query(PermissionView)
+            .join(ViewMenu)
+            .filter(ViewMenu.name.in_(target_views))
+            .all()
+        )
+        added = 0
+        for pv in pvs:
+            if pv not in alpha.permissions:
+                alpha.permissions.append(pv)
+                added += 1
+        sa_db.session.commit()
+        print('  Added %d permission(s) to Alpha role.' % added)
+"
+
 # Register ClickHouse as a database connection (idempotent)
-echo "[4/4] Registering ClickHouse database connection..."
+echo "[5/5] Registering ClickHouse database connection..."
 docker compose exec -T superset python -c "
 from superset.app import create_app
 app = create_app()
@@ -47,7 +78,7 @@ with app.app_context():
 "
 
 echo ""
-echo "=== Superset initialization complete ==="
+echo "=== Superset initialization complete (5 steps) ==="
 echo ""
 echo "Auth: Keycloak OIDC (realm: openinsight, client: superset)"
 echo "Login: http://localhost:${SUPERSET_PORT:-8088}/login/keycloak"
