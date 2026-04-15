@@ -320,6 +320,31 @@ Both DAGs load with zero import errors (`airflow dags list-import-errors` return
 | Superset Alpha missing SQL Lab | `superset init` doesn't grant `TabStateView` to Alpha | `init-superset.sh` step 4 patches Alpha role after `superset init` |
 | Airflow `docker exec` fails | Airflow container has no Docker socket | Mount `/var/run/docker.sock` in `docker-compose.yml` |
 
+### SSO + RLS Expansion (2026-04-15)
+
+**Airflow SSO:** `airflow/Dockerfile` (adds authlib) + `airflow/webserver_config.py` (AUTH_OAUTH, dual-issuer `claims_options` fix, `airflow-{admin,trigger,viewer}` role mapping). Verified: `/login/` renders Keycloak button, health returns 200.
+
+**Superset RLS + DB visibility:**
+- `ROW_LEVEL_SECURITY` feature flag enabled.
+- `oauth_user_info` now returns `client_roles + groups` so each login gets both a functional role (Alpha/Gamma) AND a group-scoped RLS role.
+- `init-superset.sh` grew from 5 → 8 steps: creates `Finance_RLS`/`HR_RLS`/`Engineering_RLS` roles, registers `fct_sales` dataset, creates RLS rules, tightens Alpha to `database access on [ClickHouse]` (removes `all_database_access`).
+- Verified in Superset metadata DB: 3 RLS rules persisted with correct role/clause bindings; Alpha has ClickHouse-specific DB perm only.
+
+**Known limitations:**
+- **Redpanda Console OIDC:** OSS v2.4.5 login requires RBAC which is enterprise-only (`failed to validate RBAC config`). Keycloak `redpanda-console` client is defined and ready; console-side wiring deferred to an enterprise build.
+- **Hop Web SSO:** Tomcat OIDC adapters removed in Keycloak 20+. Deferred; expose behind API gateway with basic auth for now.
+- **Trino SSO:** OIDC requires HTTPS. Deferred until TLS is in the cluster.
+
+**Access model (three layers):**
+1. **Keycloak** — identity + group/role claims (single source of truth).
+2. **App-level** — functional role (`Alpha`/`Gamma`/`Admin`) controls features + DB visibility; group role (`Finance_RLS`/etc.) controls row-level filters.
+3. **Data store** — ClickHouse/Postgres GRANTs + row policies enforce final boundary (deferred; sync job will mirror Keycloak groups to CH roles).
+
+| Fix applied during SSO work | Root cause | Solution |
+|-----|-----------|---------|
+| Airflow image build failed | `apache/airflow` forbids `pip install` as root | Remove `USER root`/`USER airflow` dance from Dockerfile |
+| Redpanda Console crash loop | `LOGIN_OIDC_*` env vars require enterprise RBAC | Remove env vars; keep Keycloak client for future |
+
 **Note:** Tomcat on the host was binding port 8080, blocking Keycloak — killed to proceed. If Tomcat runs on your machine, either stop it first or remap Keycloak's port in `.env`.
 
 ### What is NOT needed for this milestone

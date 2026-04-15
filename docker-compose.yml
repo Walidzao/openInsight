@@ -152,16 +152,9 @@ services:
       KAFKA_BROKERS: redpanda:9092
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
       KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
-      # Keycloak OIDC login (Redpanda Console OSS v2.4 login feature)
-      # See: https://docs.redpanda.com/current/console/config/
-      LOGIN_ENABLED: "true"
-      LOGIN_JWTSECRET: ${REDPANDA_CONSOLE_JWT_SECRET:-redpanda-console-jwt-dev-secret}
-      LOGIN_OIDC_ENABLED: "true"
-      LOGIN_OIDC_CLIENTID: redpanda-console
-      LOGIN_OIDC_CLIENTSECRET: ${REDPANDA_CONSOLE_OIDC_SECRET:-redpanda-console-dev-secret}
-      LOGIN_OIDC_ISSUERURL: http://keycloak:8080/realms/openinsight
-      LOGIN_OIDC_REDIRECTURL: http://localhost:${REDPANDA_CONSOLE_PORT:-8888}/auth/callbacks/oidc
-      LOGIN_OIDC_USERIDENTIFYINGCLAIMKEY: preferred_username
+      # Note: Redpanda Console OIDC login (LOGIN_OIDC_*) requires RBAC, which
+      # is enterprise-only in v2.4.5 OSS. Keep the `redpanda-console` Keycloak
+      # client defined so wiring is ready when we upgrade to an enterprise build.
     depends_on:
       redpanda:
         condition: service_healthy

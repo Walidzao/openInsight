@@ -74,11 +74,11 @@ AUTH_ROLES_MAPPING = {
     "superset-admin": ["Admin"],
     "superset-alpha": ["Alpha"],
     "superset-gamma": ["Gamma"],
-    # Group-based RLS roles — each grants a row-level filter on fct_sales / fct_events
+    # Group-based RLS roles — each grants a row-level filter on fct_sales / fct_events.
+    # No Executive mapping: executives use superset-admin which bypasses RLS.
     "Finance": ["Finance_RLS"],
     "HR": ["HR_RLS"],
     "Engineering": ["Engineering_RLS"],
-    "Executive": ["Executive_RLS"],
 }
 
 

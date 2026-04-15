@@ -135,11 +135,11 @@ with app.app_context():
     from flask_appbuilder.security.sqla.models import Role
 
     # --- Create group RLS roles if they don't exist ---
+    # Note: no Executive_RLS — executives map to Superset Admin which bypasses RLS.
     rls_roles_spec = [
         'Finance_RLS',
         'HR_RLS',
         'Engineering_RLS',
-        'Executive_RLS',
     ]
     for role_name in rls_roles_spec:
         existing = sa_db.session.query(Role).filter_by(name=role_name).first()
@@ -178,10 +178,10 @@ with app.app_context():
 "
 
 # Create Row Level Security rules for each department group.
-# Finance_RLS → department_code = 'FIN'
-# HR_RLS      → department_code = 'HR'
+# Finance_RLS     → department_code = 'FIN'
+# HR_RLS          → department_code = 'HR'
 # Engineering_RLS → department_code = 'ENG'
-# Executive_RLS   → no filter (sees everything — empty clause means bypass)
+# Executives have no RLS role — they use superset-admin which bypasses RLS.
 echo "[8/8] Creating Row Level Security rules for fct_sales..."
 docker compose exec -T superset python -c "
 from superset.app import create_app
@@ -195,12 +195,7 @@ with app.app_context():
     if not ch_db:
         print('  ClickHouse not found — skipping RLS setup.')
     else:
-        try:
-            from superset.connectors.sqla.models import SqlaTable, RowLevelSecurityFilter
-        except ImportError:
-            # Fallback import path (varies across Superset builds)
-            from superset.models.security import RowLevelSecurityFilter
-            from superset.connectors.sqla.models import SqlaTable
+        from superset.connectors.sqla.models import SqlaTable, RowLevelSecurityFilter
 
         fct_sales = (
             sa_db.session.query(SqlaTable)
