@@ -1,6 +1,6 @@
 # OpenInsight — Implementation Progress
 
-> **Last updated:** 2026-04-09 (validation refresh by Codex)
+> **Last updated:** 2026-04-15 (E2E validation + OIDC/SQL Lab/Airflow fixes)
 > **Branch:** `main`
 > **Implementation target:** ARCHITECTURE.md (841 lines, single source of truth)
 
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
 | **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | ✅ Complete | 5/5 tasks + OIDC |
-| **🛑 E2E Milestone** | Hop → Kafka → ClickHouse → Superset (testable arch) | 🔄 Testing | 4/4 built, Superset→CH datasource manual step remaining |
+| **🛑 E2E Milestone** | Hop → Airflow → Kafka → ClickHouse → Superset SSO → SQL Lab | ✅ Verified | Full path tested 2026-04-15 |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
 
@@ -253,9 +253,11 @@ dbt/
 
 Both DAGs load with zero import errors (`airflow dags list-import-errors` returns "No data found"). `dag_dbt_transform` verified end-to-end via `airflow dags test` — both tasks succeed.
 
-#### Verification
+#### Verification (2026-04-15)
 - Health check: `./scripts/check-health.sh` reports "Airflow (:8081) OK".
-- DAG list: `docker exec openinsight-airflow airflow dags list` shows both DAGs paused.
+- DAG list: `docker exec openinsight-airflow airflow dags list` shows both DAGs loaded.
+- `dag_hop_ingest` manually triggered → **success** (ran in ~16s); 30 customer records produced to `ingest.raw.dimensions` with correct timestamps.
+- **Fix applied:** Docker socket (`/var/run/docker.sock`) must be mounted in the Airflow container — without it `docker exec` fails with "Cannot connect to the Docker daemon".
 
 ---
 
@@ -295,18 +297,28 @@ Both DAGs load with zero import errors (`airflow dags list-import-errors` return
 
 **Total: ~250 lines of config/code (XML, YAML, Python, Shell)**
 
-### Test Results (2026-04-08)
+### Test Results (2026-04-15) — FULL E2E VERIFIED ✅
 
 | Test | Result | Detail |
 |------|--------|--------|
 | Core stack (6 services) | ✅ | PG, CH, Keycloak, Redis, Redpanda, Console all healthy |
-| Seed data | ✅ | Current verified counts: CH `fct_sales = 56`, CH `fct_events = 32` |
-| Kafka Engine DDL applied | ✅ | `ingest_raw_transactions`, `ingest_raw_events` + 2 MVs created |
-| Kafka→CH streaming ingest | ✅ | Test message produced to `ingest.raw.transactions` → `sale_id=9999` landed in `fct_sales` in <4s |
-| Keycloak JWT claims | ✅ | carol.engineering: `roles=[data-analyst, data-engineer]`, `groups=[Engineering]`, `client_roles=[cube-admin]` |
-| Hop Web | ✅ | UI at :8090, project loads, connections visible |
-| Superset | ✅ | UI at :8088 healthy, db migrated, admin user present, `clickhouse-connect` driver installed |
-| Superset → ClickHouse | ⏳ | Awaiting manual: add datasource via UI, then create a chart from `fct_sales` |
+| Seed data | ✅ | `fct_sales` 56+ rows, `fct_events` 32+ rows in ClickHouse |
+| Kafka Engine DDL | ✅ | `ingest_raw_transactions`, `ingest_raw_events` + 2 MVs active |
+| Kafka→CH streaming | ✅ | Kafka Engine + MV path verified; messages land in `fct_sales` in <4s |
+| Hop pipeline (CLI) | ✅ | `hop-run.sh sample-ingest-to-kafka.hpl` runs in ~1.5s, 30 rows to Kafka |
+| **Airflow → Hop** | ✅ | `dag_hop_ingest` triggered → success in 16s; Kafka messages confirmed |
+| Keycloak SSO (OIDC) | ✅ | `alice.finance` signs in via Keycloak; browser redirected to Superset |
+| Superset SQL Lab | ✅ | `SELECT customer_id, SUM(total_amount) … FROM fct_sales` → 10 rows |
+| Trino federation | ✅ | `SELECT count(*) FROM clickhouse.openinsight.fct_sales` → 56 |
+| Health check (all) | ✅ | `./scripts/check-health.sh` passes all core + pipeline + app checks |
+
+### Fixes applied during E2E validation
+
+| Fix | Root cause | Solution |
+|-----|-----------|---------|
+| Keycloak OIDC issuer mismatch | `start-dev` ignores `KC_HOSTNAME`; token `iss=localhost:8080` but discovery doc `issuer=keycloak:8080` | Set `attributes.frontendUrl=http://localhost:8080` in realm JSON |
+| Superset Alpha missing SQL Lab | `superset init` doesn't grant `TabStateView` to Alpha | `init-superset.sh` step 4 patches Alpha role after `superset init` |
+| Airflow `docker exec` fails | Airflow container has no Docker socket | Mount `/var/run/docker.sock` in `docker-compose.yml` |
 
 **Note:** Tomcat on the host was binding port 8080, blocking Keycloak — killed to proceed. If Tomcat runs on your machine, either stop it first or remap Keycloak's port in `.env`.
 
