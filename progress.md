@@ -1,6 +1,6 @@
 # OpenInsight — Implementation Progress
 
-> **Last updated:** 2026-04-15 (E2E validation + OIDC/SQL Lab/Airflow fixes)
+> **Last updated:** 2026-04-16 (SSO/RLS full E2E validation — all 5 users verified)
 > **Branch:** `main`
 > **Implementation target:** ARCHITECTURE.md (841 lines, single source of truth)
 
@@ -330,20 +330,42 @@ Both DAGs load with zero import errors (`airflow dags list-import-errors` return
 - `init-superset.sh` grew from 5 → 8 steps: creates `Finance_RLS`/`HR_RLS`/`Engineering_RLS` roles, registers `fct_sales` dataset, creates RLS rules, tightens Alpha to `database access on [ClickHouse]` (removes `all_database_access`).
 - Verified in Superset metadata DB: 3 RLS rules persisted with correct role/clause bindings; Alpha has ClickHouse-specific DB perm only.
 
+### RLS E2E Validation (2026-04-16)
+
+Full test run via Superset `/api/v1/chart/data` (the path that enforces RLS):
+
+| User | Roles | Expected | Result | Verdict |
+|---|---|---|---|---|
+| alice.finance | Alpha + Finance_RLS | FIN rows only | `FIN=6` | ✅ PASS |
+| bob.hr | Alpha + HR_RLS | 0 rows (no HR data in CH) | empty | ✅ PASS |
+| carol.engineering | Alpha + Engineering_RLS | ENG rows only | `ENG=21` | ✅ PASS |
+| eve.viewer | Gamma + Finance_RLS | blocked from chart queries | 403 | ✅ PASS |
+| dave.executive | Admin | all departments | `''=1, ENG=21, FIN=6, SALES=28` | ✅ PASS |
+
+**Critical design note — SQL Lab bypasses RLS (by design):**
+Superset RLS filters are applied only at the chart/explore layer (`SqlaTable.get_sqla_query()`).
+Ad-hoc SQL Lab queries execute directly against the database and bypass RLS entirely.
+- Alpha users (alice/bob/carol) can issue raw SQL in SQL Lab and see all rows.
+- Mitigation: eve.viewer (Gamma) is correctly blocked from SQL Lab (403).
+- Full enforcement requires Layer 3: ClickHouse native row policies per CH user (not yet implemented; see access model below).
+
 **Known limitations:**
+- **Superset config restart:** Config changes (e.g., `superset_config.py`, `AUTH_ROLES_MAPPING`) require a container restart to take effect: `docker compose --profile app restart superset`.
 - **Redpanda Console OIDC:** OSS v2.4.5 login requires RBAC which is enterprise-only (`failed to validate RBAC config`). Keycloak `redpanda-console` client is defined and ready; console-side wiring deferred to an enterprise build.
 - **Hop Web SSO:** Tomcat OIDC adapters removed in Keycloak 20+. Deferred; expose behind API gateway with basic auth for now.
 - **Trino SSO:** OIDC requires HTTPS. Deferred until TLS is in the cluster.
+- **Dataset column sync:** After creating a dataset programmatically, call `PUT /api/v1/dataset/{id}/refresh` to sync column metadata from ClickHouse before chart queries work.
 
 **Access model (three layers):**
 1. **Keycloak** — identity + group/role claims (single source of truth).
-2. **App-level** — functional role (`Alpha`/`Gamma`/`Admin`) controls features + DB visibility; group role (`Finance_RLS`/etc.) controls row-level filters.
-3. **Data store** — ClickHouse/Postgres GRANTs + row policies enforce final boundary (deferred; sync job will mirror Keycloak groups to CH roles).
+2. **App-level** — functional role (`Alpha`/`Gamma`/`Admin`) controls features + DB visibility; group role (`Finance_RLS`/etc.) controls row-level filters **at chart/explore layer only**.
+3. **Data store** — ClickHouse native row policies per-user enforce SQL Lab boundary (deferred; requires per-role CH accounts + row policy DDL).
 
 | Fix applied during SSO work | Root cause | Solution |
 |-----|-----------|---------|
 | Airflow image build failed | `apache/airflow` forbids `pip install` as root | Remove `USER root`/`USER airflow` dance from Dockerfile |
 | Redpanda Console crash loop | `LOGIN_OIDC_*` env vars require enterprise RBAC | Remove env vars; keep Keycloak client for future |
+| Dataset chart queries fail with "columns missing" | Dataset created programmatically has no column metadata | Call `PUT /api/v1/dataset/{id}/refresh` after dataset creation |
 
 **Note:** Tomcat on the host was binding port 8080, blocking Keycloak — killed to proceed. If Tomcat runs on your machine, either stop it first or remap Keycloak's port in `.env`.
 

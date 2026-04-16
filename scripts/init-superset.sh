@@ -164,6 +164,7 @@ with app.app_context():
             )
             if existing_ds:
                 print('  Dataset fct_sales already exists (id=%d).' % existing_ds.id)
+                ds = existing_ds
             else:
                 ds = SqlaTable(
                     table_name='fct_sales',
@@ -173,6 +174,14 @@ with app.app_context():
                 sa_db.session.add(ds)
                 sa_db.session.commit()
                 print('  Created dataset fct_sales (id=%d).' % ds.id)
+
+            # Sync column metadata from ClickHouse so chart queries work without manual refresh.
+            try:
+                ds.fetch_metadata()
+                sa_db.session.commit()
+                print('  Column metadata synced (%d columns).' % len(ds.columns))
+            except Exception as sync_err:
+                print('  Column sync warning (non-fatal): %s' % sync_err)
         except Exception as e:
             print('  Dataset creation error: %s' % e)
 "
