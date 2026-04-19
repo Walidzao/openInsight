@@ -1,0 +1,37 @@
+cubes:
+  - name: dim_customers
+    sql_table: openinsight.dim_customers
+
+    dimensions:
+      - name: id
+        sql: id
+        type: number
+        primary_key: true
+
+      - name: name
+        sql: name
+        type: string
+
+      - name: email
+        sql: email
+        type: string
+
+      - name: region_id
+        sql: region_id
+        type: number
+
+      - name: department_id
+        sql: department_id
+        type: number
+
+      - name: tier
+        sql: tier
+        type: string
+
+      - name: created_at
+        sql: created_at
+        type: time
+
+    measures:
+      - name: count
+        type: count

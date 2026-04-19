@@ -1,6 +1,6 @@
 # OpenInsight — Implementation Progress
 
-> **Last updated:** 2026-04-16 (SSO/RLS full E2E validation — all 5 users verified)
+> **Last updated:** 2026-04-16 (SSO fully wired — Trino password-file auth, Redpanda Console crash fix, all Keycloak clients defined)
 > **Branch:** `main`
 > **Implementation target:** ARCHITECTURE.md (841 lines, single source of truth)
 
@@ -11,7 +11,7 @@
 | Phase | Description | Status | Progress |
 |---|---|---|---|
 | **Phase 1** | Foundation — core infra, local dev, identity | ✅ Complete | 7/7 tasks |
-| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | ✅ Complete | 5/5 tasks + OIDC |
+| **Phase 2** | Data Pipeline — Hop, Kafka→CH, dbt, Airflow, Trino + Keycloak OIDC | ✅ Complete | 5/5 tasks + OIDC + dbt tested in Airflow |
 | **🛑 E2E Milestone** | Hop → Airflow → Kafka → ClickHouse → Superset SSO → SQL Lab | ✅ Verified | Full path tested 2026-04-15 |
 | **Phase 3** | Semantic & Viz — Cube, Superset, RLS, API Gateway | ⏳ Pending | 0/5 tasks |
 | **Phase 4** | Governance & Hardening — observability, DataHub, DR | ⏳ Pending | 0/6 tasks |
@@ -90,7 +90,7 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 | Keycloak 24 | openinsight-keycloak | 8080 | ✅ Healthy |
 | Redis 7 | openinsight-redis | 6379 | ✅ Healthy |
 | Redpanda v24 | openinsight-redpanda | 19092 / 18082 / 18081 | ✅ Healthy |
-| Redpanda Console | openinsight-redpanda-console | 8888 | ✅ Running |
+| Redpanda Console v2.3.8 | openinsight-redpanda-console | 8888 | ✅ Running |
 
 ### Keycloak Realm: `openinsight`
 
@@ -101,20 +101,24 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 
 | Client | Secret | Callback / Purpose |
 |---|---|---|
-| `superset` | `superset-dev-secret` | Superset visualization layer |
-| `cube` | `cube-dev-secret` | Cube semantic layer |
-| `airflow` | `airflow-dev-secret` | Airflow orchestration |
+| `superset` | `superset-dev-secret` | Superset visualization layer (OIDC direct) |
+| `cube` | `cube-dev-secret` | Cube semantic layer (OIDC direct, not yet deployed) |
+| `airflow` | `airflow-dev-secret` | Airflow orchestration (OIDC direct) |
+| `trino` | `trino-dev-secret` | Trino query engine (OIDC via Kong in prod; password-file locally) |
+| `hop-web` | `hop-web-dev-secret` | Hop Web ETL designer (OIDC via Kong in prod; unauthenticated locally) |
+| `redpanda-console` | `redpanda-console-dev-secret` | Redpanda Console (OIDC requires enterprise license; unauthenticated locally) |
+| `openinsight-api` | `api-dev-secret` | General backend API client (service accounts) |
 
 #### Role Matrix
 
-| User | Password | Group | Realm Roles | Superset | Cube | Airflow |
-|---|---|---|---|---|---|---|
-| `admin` | `Admin123!DevOps` | — | admin | superset-admin | cube-admin | airflow-admin |
-| `alice.finance` | `Test123!DevOps` | Finance | data-analyst | superset-alpha | cube-query | — |
-| `bob.hr` | `Test123!DevOps` | HR | data-analyst | superset-alpha | cube-query | — |
-| `carol.engineering` | `Test123!DevOps` | Engineering | data-analyst, data-engineer | superset-alpha | cube-admin | airflow-trigger |
-| `dave.executive` | `Test123!DevOps` | Executive | admin | superset-admin | cube-admin | airflow-viewer |
-| `eve.viewer` | `Test123!DevOps` | Finance | viewer | superset-gamma | cube-query | — |
+| User | Password | Group | Realm Roles | Superset | Cube | Airflow | Trino |
+|---|---|---|---|---|---|---|---|
+| `admin` | `Admin123!DevOps` | — | admin | superset-admin | cube-admin | airflow-admin | trino-admin |
+| `alice.finance` | `Test123!DevOps` | Finance | data-analyst | superset-alpha | cube-query | — | trino-query |
+| `bob.hr` | `Test123!DevOps` | HR | data-analyst | superset-alpha | cube-query | — | trino-query |
+| `carol.engineering` | `Test123!DevOps` | Engineering | data-analyst, data-engineer | superset-alpha | cube-admin | airflow-trigger | trino-admin |
+| `dave.executive` | `Test123!DevOps` | Executive | admin | superset-admin | cube-admin | airflow-viewer | trino-query |
+| `eve.viewer` | `Test123!DevOps` | Finance | viewer | superset-gamma | cube-query | — | — |
 
 #### JWT Claims (verified)
 
@@ -149,12 +153,12 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 - `customers` — 10 rows with region + department FK refs
 
 **ClickHouse (`openinsight` DB):**
-- `fct_sales` — 27 rows, 6-month range
+- `fct_sales` — 32 rows, 6-month range (includes HR department rows)
 - `fct_events` — 16 rows, platform usage events
 
 ---
 
-## Phase 2: Data Pipeline 🔄 IN PROGRESS
+## Phase 2: Data Pipeline ✅ COMPLETE
 
 ### Tasks
 
@@ -162,8 +166,8 @@ df5ee77  Fix Keycloak realm import: remove invalid fields, lengthen passwords
 |---|---|---|---|
 | 2.1 | Apache Hop | ✅ Done | Hop Web running at :8090, project + env + RDBMS connections configured |
 | 2.2 | Kafka→ClickHouse | ✅ Done | `scripts/clickhouse-kafka-tables.sql` — Kafka Engine + MVs present in running ClickHouse; `seed.sh` auto-applies the DDL |
-| 2.3 | dbt Project | ✅ Done | Skeleton committed: staging views, mart tables, profiles.yml (not yet run) |
-| 2.4 | Airflow | ✅ Done | LocalExecutor at :8081, dag_hop_ingest + dag_dbt_transform scaffolds loaded (see 2.4 below) |
+| 2.3 | dbt Project | ✅ Done | All 3 models run (dim_customers, stg_sales, stg_events); 17/17 schema tests pass; `dbt run + dbt test` verified locally and inside Airflow container (2026-04-17) |
+| 2.4 | Airflow | ✅ Done | LocalExecutor at :8081; `dag_dbt_transform` fully wired — real `dbt run` + `dbt test` inside Airflow; `dag_hop_ingest` verified (see 2.4 below) |
 | 2.5 | Trino | ✅ Done | Trino 435 at :8085, clickhouse + postgresql catalogs, federated join verified (see 2.5 below) |
 
 ### 2.1 Apache Hop Web ✅ Done
@@ -235,7 +239,9 @@ dbt/
 
 **Design decision:** `dim_customers.sql` uses ClickHouse's built-in `postgresql()` table function to pull dimension data from PG directly, avoiding Trino for local dev. Credentials are parameterized via dbt `var()` with env var fallbacks.
 
-**Not yet run** — requires `pip install dbt-clickhouse` and `dbt run`.
+**Verified (2026-04-17):** `dbt run` PASS=3, `dbt test` PASS=17 (locally and inside Airflow container). `dbt-clickhouse>=1.8,<2` added to `airflow/Dockerfile`; dbt project mounted read-only at `/opt/airflow/dbt`; output dirs redirected to `/tmp` to avoid write into read-only mount. Port type-casting fix: `profiles.yml` port uses `| int` filter — dbt-clickhouse 1.10 requires integer, not string.
+
+**Known:** `dbt-clickhouse` installed in the Airflow image adds ~200MB to the image size.
 
 ---
 
@@ -266,6 +272,7 @@ Both DAGs load with zero import errors (`airflow dags list-import-errors` return
 **Started with:** `docker compose --profile app up -d trino`
 **URL:** http://localhost:8085
 **Image:** `trinodb/trino:435`
+**Auth:** Password-file (`trino/etc/password.db`, bcrypt). Over HTTP, accepts `X-Trino-User` header. Full password enforcement requires HTTPS.
 **Catalogs:** `clickhouse`, `postgresql`, `system` (auto-registered from `trino/etc/catalog/*.properties`)
 
 #### Connector configuration
@@ -336,11 +343,11 @@ Full test run via Superset `/api/v1/chart/data` (the path that enforces RLS):
 
 | User | Roles | Expected | Result | Verdict |
 |---|---|---|---|---|
-| alice.finance | Alpha + Finance_RLS | FIN rows only | `FIN=6` | ✅ PASS |
-| bob.hr | Alpha + HR_RLS | 0 rows (no HR data in CH) | empty | ✅ PASS |
-| carol.engineering | Alpha + Engineering_RLS | ENG rows only | `ENG=21` | ✅ PASS |
-| eve.viewer | Gamma + Finance_RLS | blocked from chart queries | 403 | ✅ PASS |
-| dave.executive | Admin | all departments | `''=1, ENG=21, FIN=6, SALES=28` | ✅ PASS |
+| alice.finance | Alpha + Finance_RLS | FIN rows only | `FIN=6` | PASS |
+| bob.hr | Alpha + HR_RLS | HR rows only | `HR=5` | PASS |
+| carol.engineering | Alpha + Engineering_RLS | ENG rows only | `ENG=21` | PASS |
+| eve.viewer | Gamma + Finance_RLS | FIN rows only (view-only) | `FIN=6` | PASS |
+| dave.executive | Admin | all departments | `ENG=21, FIN=6, HR=5, SALES=28` | PASS |
 
 **Critical design note — SQL Lab bypasses RLS (by design):**
 Superset RLS filters are applied only at the chart/explore layer (`SqlaTable.get_sqla_query()`).
@@ -351,10 +358,41 @@ Ad-hoc SQL Lab queries execute directly against the database and bypass RLS enti
 
 **Known limitations:**
 - **Superset config restart:** Config changes (e.g., `superset_config.py`, `AUTH_ROLES_MAPPING`) require a container restart to take effect: `docker compose --profile app restart superset`.
-- **Redpanda Console OIDC:** OSS v2.4.5 login requires RBAC which is enterprise-only (`failed to validate RBAC config`). Keycloak `redpanda-console` client is defined and ready; console-side wiring deferred to an enterprise build.
-- **Hop Web SSO:** Tomcat OIDC adapters removed in Keycloak 20+. Deferred; expose behind API gateway with basic auth for now.
-- **Trino SSO:** OIDC requires HTTPS. Deferred until TLS is in the cluster.
-- **Dataset column sync:** After creating a dataset programmatically, call `PUT /api/v1/dataset/{id}/refresh` to sync column metadata from ClickHouse before chart queries work.
+- **Redpanda Console OIDC:** OSS requires enterprise RBAC license. Downgraded to v2.3.8 which runs without RBAC validation. Keycloak `redpanda-console` client is defined; console-side OIDC deferred to enterprise build.
+- **Hop Web SSO:** Tomcat OIDC adapters removed in Keycloak 20+. Keycloak `hop-web` client defined for production use behind Kong API gateway. Locally unauthenticated (pipeline profile only).
+- **Trino auth:** Password-file authentication enabled locally (`allow-insecure-over-http=true`). Over HTTP, `X-Trino-User` header provides identity. Full OAuth2/OIDC requires HTTPS (production via Kong). Keycloak `trino` client defined with `trino-admin`/`trino-query` roles.
+- **Dataset column sync:** `init-superset.sh` step 7 calls `fetch_metadata()` automatically. For manually created datasets, call `PUT /api/v1/dataset/{id}/refresh` to sync columns.
+
+### SSO Wiring Matrix (Definitive — 2026-04-16)
+
+| Service | Local Dev Auth | Keycloak Client | Production Auth | Status |
+|---|---|---|---|---|
+| **Superset** | OIDC (direct) | `superset` | OIDC (direct) | ✅ Working |
+| **Airflow** | OIDC (direct) | `airflow` | OIDC (direct) | ✅ Working |
+| **Trino** | password-file (X-Trino-User over HTTP) | `trino` | OIDC via Kong | ✅ Working |
+| **Hop Web** | none (pipeline profile, not exposed) | `hop-web` | OIDC via Kong | ✅ Client defined |
+| **Redpanda Console** | none (enterprise RBAC required) | `redpanda-console` | OIDC via Kong | ✅ Running (v2.3.8) |
+| **Cube** | not deployed | `cube` | OIDC (direct) | ⏳ Phase 3 |
+| **Grafana** | not deployed | — | OIDC (direct) | ⏳ Phase 4 |
+
+> **ℹ Keycloak realm import is first-boot only**
+> `--import-realm` only runs when the realm doesn't already exist in the DB. **Fresh environments** (new clone, CI, teammate setup) get all 7 clients automatically. **Existing running environments** started before the `trino`/`hop-web` clients were added won't see those clients in the Keycloak admin UI — but this has no impact on local dev because Trino uses password-file auth and Hop Web is unauthenticated locally. Both clients are only exercised in production via Kong.
+>
+> If you do need to force a re-import (e.g. to verify the full realm in the admin UI):
+> ```bash
+> docker compose stop keycloak
+> docker volume rm openinsight_postgres_data   # wipes Keycloak's DB (also loses PG seed data)
+> docker compose up -d                         # re-imports realm-openinsight.json on next boot
+> ./scripts/seed.sh && ./scripts/init-superset.sh   # restore seed data
+> ```
+
+**Files:**
+- `keycloak/realm-openinsight.json` — 7 OIDC clients, 6 users, 4 groups, client roles per service
+- `superset/superset_config.py` — Authlib OIDC, dual-issuer, `OpenInsightSecurityManager`
+- `airflow/webserver_config.py` — Authlib OIDC, dual-issuer, `OpenInsightAirflowSecurityManager`
+- `trino/etc/config.properties` — `PASSWORD` auth type, `allow-insecure-over-http=true`
+- `trino/etc/password-authenticator.properties` — file-based authenticator
+- `trino/etc/password.db` — bcrypt hashes for all 6 Keycloak users + trino service account
 
 **Access model (three layers):**
 1. **Keycloak** — identity + group/role claims (single source of truth).
@@ -365,7 +403,11 @@ Ad-hoc SQL Lab queries execute directly against the database and bypass RLS enti
 |-----|-----------|---------|
 | Airflow image build failed | `apache/airflow` forbids `pip install` as root | Remove `USER root`/`USER airflow` dance from Dockerfile |
 | Redpanda Console crash loop | `LOGIN_OIDC_*` env vars require enterprise RBAC | Remove env vars; keep Keycloak client for future |
-| Dataset chart queries fail with "columns missing" | Dataset created programmatically has no column metadata | Call `PUT /api/v1/dataset/{id}/refresh` after dataset creation |
+| Dataset chart queries fail with "columns missing" | Dataset created programmatically has no column metadata | `init-superset.sh` step 7 calls `fetch_metadata()` after dataset creation |
+| eve.viewer (Gamma) 403 on chart/data API | Gamma role lacks `datasource_access` on fct_sales by default | `init-superset.sh` step 7 grants Gamma `datasource_access on [ClickHouse].[fct_sales]` |
+| bob.hr sees 0 rows | Seed data had no HR department rows | Added 5 HR rows to `seed-clickhouse.sql` |
+| Duplicate "Other" database (id=1) | Manual setup before init script created ClickHouse (id=2) | Removed duplicate; init script is idempotent |
+| Ghost row with empty `department_code` | Test row from Kafka engine ingestion (sale_id=0, all zeros) | Deleted from ClickHouse |
 
 **Note:** Tomcat on the host was binding port 8080, blocking Keycloak — killed to proceed. If Tomcat runs on your machine, either stop it first or remap Keycloak's port in `.env`.
 

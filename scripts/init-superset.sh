@@ -124,7 +124,7 @@ with app.app_context():
 "
 
 # Create group-based RLS roles and register fct_sales dataset.
-# Finance/HR/Engineering/Executive roles are used by Superset RLS to scope rows.
+# Finance/HR/Engineering roles are used by Superset RLS to scope rows.
 echo "[7/8] Creating group RLS roles and fct_sales dataset..."
 docker compose exec -T superset python -c "
 from superset.app import create_app
@@ -132,10 +132,11 @@ app = create_app()
 with app.app_context():
     from superset.extensions import db as sa_db
     from superset.models.core import Database
-    from flask_appbuilder.security.sqla.models import Role
+    from flask_appbuilder.security.sqla.models import (
+        Role, PermissionView, Permission, ViewMenu
+    )
 
     # --- Create group RLS roles if they don't exist ---
-    # Note: no Executive_RLS — executives map to Superset Admin which bypasses RLS.
     rls_roles_spec = [
         'Finance_RLS',
         'HR_RLS',
@@ -182,6 +183,32 @@ with app.app_context():
                 print('  Column metadata synced (%d columns).' % len(ds.columns))
             except Exception as sync_err:
                 print('  Column sync warning (non-fatal): %s' % sync_err)
+
+            # Grant Gamma role datasource_access on fct_sales so Gamma users
+            # (e.g. eve.viewer) can view charts/dashboards with RLS applied.
+            gamma = sa_db.session.query(Role).filter_by(name='Gamma').first()
+            if gamma and ds.perm:
+                vm = sa_db.session.query(ViewMenu).filter_by(name=ds.perm).first()
+                if vm:
+                    ds_pv = (
+                        sa_db.session.query(PermissionView)
+                        .join(Permission)
+                        .filter(Permission.name == 'datasource_access')
+                        .filter(PermissionView.view_menu_id == vm.id)
+                        .first()
+                    )
+                    if ds_pv and ds_pv not in gamma.permissions:
+                        gamma.permissions.append(ds_pv)
+                        sa_db.session.commit()
+                        print('  Granted Gamma datasource_access on %s.' % ds.perm)
+                    elif ds_pv:
+                        print('  Gamma already has datasource_access on %s.' % ds.perm)
+                    else:
+                        print('  datasource_access perm not found for %s.' % ds.perm)
+                else:
+                    print('  ViewMenu not found for %s — Gamma grant skipped.' % ds.perm)
+            elif not gamma:
+                print('  Gamma role not found — dataset access grant skipped.')
         except Exception as e:
             print('  Dataset creation error: %s' % e)
 "
@@ -214,7 +241,6 @@ with app.app_context():
         if not fct_sales:
             print('  fct_sales dataset not found — run step 7 first.')
         else:
-            # (role_name, clause)  — Executive_RLS: no filter so execs see all rows
             rules = [
                 ('Finance_RLS',     \"department_code = 'FIN'\"),
                 ('HR_RLS',          \"department_code = 'HR'\"),

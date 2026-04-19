@@ -144,7 +144,7 @@ services:
   # Redpanda Console — Web UI for topic inspection and debugging
   # ---------------------------------------------------------------------------
   redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:v2.4.5
+    image: docker.redpanda.com/redpandadata/console:v2.3.8
     container_name: openinsight-redpanda-console
     ports:
       - "${REDPANDA_CONSOLE_PORT:-8888}:8080"
@@ -152,9 +152,9 @@ services:
       KAFKA_BROKERS: redpanda:9092
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
       KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
-      # Note: Redpanda Console OIDC login (LOGIN_OIDC_*) requires RBAC, which
-      # is enterprise-only in v2.4.5 OSS. Keep the `redpanda-console` Keycloak
-      # client defined so wiring is ready when we upgrade to an enterprise build.
+      # Note: Redpanda Console OIDC login (LOGIN_OIDC_*) requires enterprise
+      # RBAC. Using v2.3.8 which runs without RBAC validation. The
+      # `redpanda-console` Keycloak client is defined for future enterprise use.
     depends_on:
       redpanda:
         condition: service_healthy
@@ -221,10 +221,21 @@ services:
       KEYCLOAK_REALM: openinsight
       AIRFLOW_KEYCLOAK_CLIENT_ID: airflow
       AIRFLOW_KEYCLOAK_SECRET: ${AIRFLOW_KEYCLOAK_SECRET:-airflow-dev-secret}
+      # dbt connection env vars (used by dbt/profiles.yml inside the container)
+      CH_HOST: clickhouse
+      CH_NATIVE_PORT: "9000"
+      CH_USER: ${CLICKHOUSE_USER:-openinsight}
+      CH_PASS: ${CLICKHOUSE_PASSWORD:-openinsight_dev}
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_DB: ${POSTGRES_DB:-openinsight}
+      PG_USER: ${POSTGRES_USER:-openinsight}
+      PG_PASS: ${POSTGRES_PASSWORD:-openinsight_dev}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
       - ./scripts/airflow-entrypoint.sh:/opt/airflow/entrypoint.sh:ro
+      - ./dbt:/opt/airflow/dbt:ro
       - airflow_logs:/opt/airflow/logs
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["bash", "/opt/airflow/entrypoint.sh"]

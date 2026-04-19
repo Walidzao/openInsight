@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: stg_sales
+    description: "Staging view over fct_sales — raw sales transactions from ClickHouse"
+    columns:
+      - name: sale_id
+        description: "Sale identifier — not unique in MergeTree (duplicates merged asynchronously)"
+        tests:
+          - not_null
+      - name: sale_date
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: total_amount
+        tests:
+          - not_null
+      - name: department_code
+        tests:
+          - not_null
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["USD", "EUR", "GBP"]
+
+  - name: stg_events
+    description: "Staging view over fct_events — platform usage events from ClickHouse"
+    columns:
+      - name: event_id
+        description: "Primary key — unique event identifier"
+        tests:
+          - not_null
+          - unique
+      - name: event_timestamp
+        tests:
+          - not_null
+      - name: event_type
+        tests:
+          - not_null
+      - name: user_id
+        tests:
+          - not_null

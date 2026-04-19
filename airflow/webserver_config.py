@@ -59,7 +59,7 @@ AUTH_ROLES_SYNC_AT_LOGIN = True
 # Map Keycloak client roles (airflow client) → Airflow FAB roles
 AUTH_ROLES_MAPPING = {
     "airflow-admin": ["Admin"],
-    "airflow-trigger": ["User"],
+    "airflow-trigger": ["Op"],
     "airflow-viewer": ["Viewer"],
 }
 

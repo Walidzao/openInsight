@@ -1,0 +1,62 @@
+cubes:
+  - name: fct_sales
+    sql_table: openinsight.fct_sales
+
+    dimensions:
+      - name: sale_id
+        sql: sale_id
+        type: number
+        primary_key: true
+
+      - name: sale_date
+        sql: sale_date
+        type: time
+
+      - name: customer_id
+        sql: customer_id
+        type: number
+
+      - name: product_category_id
+        sql: product_category_id
+        type: number
+
+      - name: region_code
+        sql: region_code
+        type: string
+
+      - name: department_code
+        sql: department_code
+        type: string
+
+      - name: currency
+        sql: currency
+        type: string
+
+      - name: created_at
+        sql: created_at
+        type: time
+
+    measures:
+      - name: count
+        type: count
+
+      - name: total_revenue
+        sql: total_amount
+        type: sum
+
+      - name: avg_order_value
+        sql: total_amount
+        type: avg
+
+      - name: total_units
+        sql: quantity
+        type: sum
+
+      - name: avg_unit_price
+        sql: unit_price
+        type: avg
+
+    joins:
+      - name: dim_customers
+        sql: "{fct_sales}.customer_id = {dim_customers}.id"
+        relationship: many_to_one

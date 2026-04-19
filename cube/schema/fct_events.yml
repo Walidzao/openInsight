@@ -1,0 +1,53 @@
+cubes:
+  - name: fct_events
+    sql_table: openinsight.fct_events
+
+    dimensions:
+      - name: event_id
+        sql: toString(event_id)
+        type: string
+        primary_key: true
+
+      - name: event_timestamp
+        sql: event_timestamp
+        type: time
+
+      - name: event_type
+        sql: event_type
+        type: string
+
+      - name: user_id
+        sql: user_id
+        type: string
+
+      - name: department_code
+        sql: department_code
+        type: string
+
+      - name: resource_type
+        sql: resource_type
+        type: string
+
+      - name: resource_id
+        sql: resource_id
+        type: string
+
+      - name: duration_ms
+        sql: duration_ms
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: total_duration_ms
+        sql: duration_ms
+        type: sum
+
+      - name: avg_duration_ms
+        sql: duration_ms
+        type: avg
+
+      - name: unique_users
+        sql: user_id
+        type: count_distinct

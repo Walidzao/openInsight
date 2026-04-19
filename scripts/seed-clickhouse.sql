@@ -63,7 +63,12 @@ INSERT INTO openinsight.fct_sales (sale_id, sale_date, customer_id, product_cate
     (24, '2026-02-05', 3, 8, 'APAC', 'ENG', 10, 200.00, 2000.00),
     (25, '2026-02-10', 1, 5, 'NA', 'SALES', 8, 549.00, 4392.00),
     (26, '2026-02-12', 7, 4, 'EU', 'FIN', 20, 109.00, 2180.00),
-    (27, '2026-02-15', 6, 9, 'NA', 'ENG', 4, 2500.00, 10000.00);
+    (27, '2026-02-15', 6, 9, 'NA', 'ENG', 4, 2500.00, 10000.00),
+    (28, '2025-10-08', 4, 4, 'NA', 'HR', 5, 120.00, 600.00),
+    (29, '2025-11-18', 9, 5, 'EU', 'HR', 12, 350.00, 4200.00),
+    (30, '2025-12-22', 5, 8, 'APAC', 'HR', 3, 500.00, 1500.00),
+    (31, '2026-01-14', 10, 7, 'NA', 'HR', 8, 275.00, 2200.00),
+    (32, '2026-02-08', 2, 4, 'EU', 'HR', 15, 120.00, 1800.00);
 
 -- Seed fct_events with sample platform usage
 INSERT INTO openinsight.fct_events (event_timestamp, event_type, user_id, department_code, resource_type, resource_id, duration_ms) VALUES

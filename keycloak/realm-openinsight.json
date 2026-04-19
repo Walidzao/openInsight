@@ -87,6 +87,16 @@
           "name": "airflow-trigger",
           "description": "Trigger DAG runs (but not modify DAGs)"
         }
+      ],
+      "trino": [
+        {
+          "name": "trino-admin",
+          "description": "Full Trino access, manage queries, kill queries"
+        },
+        {
+          "name": "trino-query",
+          "description": "Execute queries (read-only data access)"
+        }
       ]
     }
   },
@@ -135,6 +145,8 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
       "rootUrl": "http://localhost:8088",
       "baseUrl": "/",
       "redirectUris": [
@@ -322,6 +334,8 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
       "rootUrl": "http://localhost:8888",
       "baseUrl": "/",
       "redirectUris": [
@@ -329,6 +343,119 @@
       ],
       "webOrigins": [
         "http://localhost:8888"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "trino",
+      "name": "Trino Query Engine",
+      "description": "OpenInsight query federation layer",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "trino-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "rootUrl": "http://localhost:8085",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:8085/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8085"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "client_roles",
+            "userinfo.token.claim": "true",
+            "usermodel.clientRoleMapping.clientId": "trino"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "hop-web",
+      "name": "Apache Hop Web",
+      "description": "OpenInsight ETL/pipeline designer (OIDC via Kong in production)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "hop-web-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "rootUrl": "http://localhost:8090",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:8090/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8090"
       ],
       "protocolMappers": [
         {
@@ -371,6 +498,8 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
       "protocolMappers": [
         {
           "name": "groups",
@@ -426,6 +555,9 @@
         ],
         "airflow": [
           "airflow-admin"
+        ],
+        "trino": [
+          "trino-admin"
         ]
       }
     },
@@ -452,6 +584,9 @@
         ],
         "cube": [
           "cube-query"
+        ],
+        "trino": [
+          "trino-query"
         ]
       }
     },
@@ -478,6 +613,9 @@
         ],
         "cube": [
           "cube-query"
+        ],
+        "trino": [
+          "trino-query"
         ]
       }
     },
@@ -507,6 +645,9 @@
         ],
         "airflow": [
           "airflow-trigger"
+        ],
+        "trino": [
+          "trino-admin"
         ]
       }
     },
@@ -536,6 +677,9 @@
         ],
         "airflow": [
           "airflow-viewer"
+        ],
+        "trino": [
+          "trino-query"
         ]
       }
     },
