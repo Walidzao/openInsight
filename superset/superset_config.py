@@ -1,6 +1,11 @@
 import os
+from typing import Optional
+from urllib.parse import quote as _quote
+
+from flask import request
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from superset.security import SupersetSecurityManager
+from itsdangerous import BadSignature, URLSafeSerializer
 
 # =============================================================================
 # OpenInsight Superset Configuration
@@ -20,6 +25,13 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
 KEYCLOAK_INTERNAL_URL = os.environ.get('KEYCLOAK_INTERNAL_URL', 'http://keycloak:8080')
 KEYCLOAK_EXTERNAL_URL = os.environ.get('KEYCLOAK_EXTERNAL_URL', 'http://localhost:8080')
 KEYCLOAK_REALM = os.environ.get('KEYCLOAK_REALM', 'openinsight')
+TARGET_COOKIE_NAME = "oi_target"
+TARGET_COOKIE_SECRET = os.environ.get("OI_TARGET_COOKIE_SECRET", "changeme-openinsight-target-cookie")
+PILOT_CLIENT_ROLE = "superset-alpha-pilot"
+TARGET_ROLE_MAP = {
+    "openinsight": "target-openinsight",
+    "engineering-data": "target-engineering-data",
+}
 
 AUTH_TYPE = AUTH_OAUTH
 
@@ -73,13 +85,48 @@ AUTH_ROLES_MAPPING = {
     # Functional roles (from Keycloak client roles)
     "superset-admin": ["Admin"],
     "superset-alpha": ["Alpha"],
+    "superset-alpha-pilot": ["AlphaPilot"],
     "superset-gamma": ["Gamma"],
+    "active-target-openinsight": ["DB_OpenInsight"],
+    "active-target-engineering-data": ["DB_Engineering"],
     # Group-based RLS roles — each grants a row-level filter on fct_sales / fct_events.
     # No Executive mapping: executives use superset-admin which bypasses RLS.
     "Finance": ["Finance_RLS"],
     "HR": ["HR_RLS"],
     "Engineering": ["Engineering_RLS"],
 }
+
+
+def _target_serializer():
+    return URLSafeSerializer(TARGET_COOKIE_SECRET, salt="openinsight-target")
+
+
+def _read_selected_target() -> Optional[str]:
+    raw_value = request.cookies.get(TARGET_COOKIE_NAME)
+    if not raw_value:
+        return None
+    try:
+        value = _target_serializer().loads(raw_value)
+    except BadSignature:
+        return None
+    return value if value in TARGET_ROLE_MAP else None
+
+
+def _resolve_active_target(realm_roles: list[str]) -> Optional[str]:
+    allowed_targets = {
+        target_id
+        for target_id, role_name in TARGET_ROLE_MAP.items()
+        if role_name in realm_roles
+    }
+    if not allowed_targets:
+        return None
+
+    selected_target = _read_selected_target()
+    if selected_target in allowed_targets:
+        return selected_target
+    if "openinsight" in allowed_targets:
+        return "openinsight"
+    return sorted(allowed_targets)[0]
 
 
 # --- Custom Security Manager ---
@@ -97,22 +144,23 @@ class OpenInsightSecurityManager(SupersetSecurityManager):
             # can assign both functional roles AND group-scoped RLS roles.
             client_roles = data.get("client_roles", [])
             groups = data.get("groups", [])
+            realm_roles = data.get("roles", [])
+            role_keys = client_roles + groups
+            if PILOT_CLIENT_ROLE in client_roles:
+                active_target = _resolve_active_target(realm_roles)
+                if active_target:
+                    role_keys.append(f"active-target-{active_target}")
             return {
                 "username": data.get("preferred_username", ""),
                 "first_name": data.get("given_name", ""),
                 "last_name": data.get("family_name", ""),
                 "email": data.get("email", ""),
-                "role_keys": client_roles + groups,
+                "role_keys": role_keys,
             }
         return {}
 
 
 CUSTOM_SECURITY_MANAGER = OpenInsightSecurityManager
-
-# --- SSO Logout ---
-# Redirect to Keycloak's end_session_endpoint so the browser session is killed
-# in both Superset and Keycloak (true single sign-out).
-from urllib.parse import quote as _quote
 
 _SUPERSET_URL = os.environ.get("SUPERSET_URL", "http://localhost:8088")
 LOGOUT_REDIRECT_URL = (

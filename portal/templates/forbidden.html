@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Access Denied</title>
+    <style>
+      body { font-family: sans-serif; margin: 3rem; background: #fff7ed; color: #7c2d12; }
+      main { max-width: 36rem; margin: 0 auto; background: #fff; padding: 2rem; border-radius: 12px; border: 1px solid #fdba74; }
+      a { color: #c2410c; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Access denied</h1>
+      <p>{{ user.username }} is authenticated, but does not have the <code>portal-pilot</code> role required for this pilot portal.</p>
+      <p><a href="/logout">Sign out</a></p>
+    </main>
+  </body>
+  </html>

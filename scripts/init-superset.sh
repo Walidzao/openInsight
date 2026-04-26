@@ -54,31 +54,65 @@ with app.app_context():
         print('  Added %d permission(s) to Alpha role.' % added)
 "
 
-# Register ClickHouse as a database connection (idempotent)
-echo "[5/8] Registering ClickHouse database connection..."
+# Register target-scoped ClickHouse database connections (idempotent)
+echo "[5/8] Registering target-scoped ClickHouse database connections..."
 docker compose exec -T superset python -c "
+import os
 from superset.app import create_app
 app = create_app()
 with app.app_context():
     from superset.extensions import db as sa_db
     from superset.models.core import Database
-    existing = sa_db.session.query(Database).filter_by(database_name='ClickHouse').first()
-    if existing:
-        print('  ClickHouse connection already exists (id=%d).' % existing.id)
+    openinsight_uri = (
+        'clickhousedb+connect://superset_openinsight_ro:%s@clickhouse:8123/openinsight'
+        % os.environ.get('CLICKHOUSE_SUPERSET_OPENINSIGHT_PASSWORD', 'superset_openinsight_dev')
+    )
+    engineering_uri = (
+        'clickhousedb+connect://superset_engineering_ro:%s@clickhouse:8123/engineering_data'
+        % os.environ.get('CLICKHOUSE_SUPERSET_ENGINEERING_PASSWORD', 'superset_engineering_dev')
+    )
+
+    openinsight = sa_db.session.query(Database).filter_by(database_name='ClickHouse OpenInsight').first()
+    legacy = sa_db.session.query(Database).filter_by(database_name='ClickHouse').first()
+    if openinsight:
+        openinsight.sqlalchemy_uri = openinsight_uri
+        openinsight.expose_in_sqllab = True
+        print('  ClickHouse OpenInsight connection already exists (id=%d).' % openinsight.id)
+    elif legacy:
+        legacy.database_name = 'ClickHouse OpenInsight'
+        legacy.sqlalchemy_uri = openinsight_uri
+        legacy.expose_in_sqllab = True
+        openinsight = legacy
+        print('  Renamed legacy ClickHouse connection to ClickHouse OpenInsight (id=%d).' % openinsight.id)
     else:
-        conn = Database(
-            database_name='ClickHouse',
-            sqlalchemy_uri='clickhousedb+connect://openinsight:openinsight_dev@clickhouse:8123/openinsight',
+        openinsight = Database(
+            database_name='ClickHouse OpenInsight',
+            sqlalchemy_uri=openinsight_uri,
             expose_in_sqllab=True,
         )
-        sa_db.session.add(conn)
-        sa_db.session.commit()
-        print('  ClickHouse connection created (id=%d).' % conn.id)
+        sa_db.session.add(openinsight)
+        print('  Created ClickHouse OpenInsight connection.')
+
+    engineering = sa_db.session.query(Database).filter_by(database_name='ClickHouse Engineering').first()
+    if engineering:
+        engineering.sqlalchemy_uri = engineering_uri
+        engineering.expose_in_sqllab = True
+        print('  ClickHouse Engineering connection already exists (id=%d).' % engineering.id)
+    else:
+        engineering = Database(
+            database_name='ClickHouse Engineering',
+            sqlalchemy_uri=engineering_uri,
+            expose_in_sqllab=True,
+        )
+        sa_db.session.add(engineering)
+        print('  Created ClickHouse Engineering connection.')
+
+    sa_db.session.commit()
 "
 
-# Tighten Alpha database access: remove all_database_access, grant ClickHouse only.
+# Tighten Alpha database access, create DB roles, and clone AlphaPilot.
 # This must run AFTER superset init (step 3) which re-adds all_database_access to Alpha.
-echo "[6/8] Tightening Alpha role database access (ClickHouse only)..."
+echo "[6/8] Tightening Alpha role database access and creating pilot DB roles..."
 docker compose exec -T superset python -c "
 from superset.app import create_app
 app = create_app()
@@ -88,9 +122,23 @@ with app.app_context():
     from flask_appbuilder.security.sqla.models import Role, PermissionView, Permission, ViewMenu
 
     alpha = sa_db.session.query(Role).filter_by(name='Alpha').first()
+    alpha_pilot = sa_db.session.query(Role).filter_by(name='AlphaPilot').first()
+    db_openinsight = sa_db.session.query(Role).filter_by(name='DB_OpenInsight').first()
+    db_engineering = sa_db.session.query(Role).filter_by(name='DB_Engineering').first()
     if not alpha:
         print('  Alpha role not found — skipping.')
     else:
+        if not alpha_pilot:
+            alpha_pilot = Role(name='AlphaPilot')
+            sa_db.session.add(alpha_pilot)
+        if not db_openinsight:
+            db_openinsight = Role(name='DB_OpenInsight')
+            sa_db.session.add(db_openinsight)
+        if not db_engineering:
+            db_engineering = Role(name='DB_Engineering')
+            sa_db.session.add(db_engineering)
+        sa_db.session.commit()
+
         # Remove all_database_access so Alpha cannot query arbitrary future databases
         all_db_pvs = (
             sa_db.session.query(PermissionView)
@@ -98,34 +146,63 @@ with app.app_context():
             .filter(Permission.name == 'all_database_access')
             .all()
         )
+        dbs = {
+            db.database_name: db
+            for db in sa_db.session.query(Database).filter(
+                Database.database_name.in_(['ClickHouse OpenInsight', 'ClickHouse Engineering'])
+            )
+        }
+
+        def db_perm(db_name):
+            db = dbs.get(db_name)
+            if not db:
+                return None
+            return (
+                sa_db.session.query(PermissionView)
+                .join(ViewMenu)
+                .filter(ViewMenu.name == ('[%s].(id:%d)' % (db.database_name, db.id)))
+                .first()
+            )
+
+        openinsight_pv = db_perm('ClickHouse OpenInsight')
+        engineering_pv = db_perm('ClickHouse Engineering')
+        db_specific_pvs = [pv for pv in [openinsight_pv, engineering_pv] if pv]
         removed = 0
         for pv in all_db_pvs:
             if pv in alpha.permissions:
                 alpha.permissions.remove(pv)
                 removed += 1
+        for pv in db_specific_pvs:
+            if pv in alpha.permissions and pv is not openinsight_pv:
+                alpha.permissions.remove(pv)
 
-        # Grant access to ClickHouse specifically
-        ch_db = sa_db.session.query(Database).filter_by(database_name='ClickHouse').first()
         added = 0
-        if ch_db:
-            view_menu_name = '[%s].(id:%d)' % (ch_db.database_name, ch_db.id)
-            ch_pv = (
-                sa_db.session.query(PermissionView)
-                .join(ViewMenu)
-                .filter(ViewMenu.name == view_menu_name)
-                .first()
-            )
-            if ch_pv and ch_pv not in alpha.permissions:
-                alpha.permissions.append(ch_pv)
-                added += 1
+        if openinsight_pv and openinsight_pv not in alpha.permissions:
+            alpha.permissions.append(openinsight_pv)
+            added += 1
+
+        db_openinsight.permissions = []
+        db_engineering.permissions = []
+        if openinsight_pv:
+            db_openinsight.permissions.append(openinsight_pv)
+        if engineering_pv:
+            db_engineering.permissions.append(engineering_pv)
+
+        alpha_pilot.permissions = []
+        for pv in alpha.permissions:
+            if pv in all_db_pvs or pv in db_specific_pvs:
+                continue
+            alpha_pilot.permissions.append(pv)
 
         sa_db.session.commit()
-        print('  Removed %d all_database_access perm(s), added %d ClickHouse-specific perm(s).' % (removed, added))
+        print('  Removed %d all_database_access perm(s), added %d ClickHouse OpenInsight DB perm(s).' % (removed, added))
+        print('  DB roles ensured: DB_OpenInsight, DB_Engineering.')
+        print('  AlphaPilot cloned from Alpha with DB access stripped.')
 "
 
-# Create group-based RLS roles and register fct_sales dataset.
+# Create group-based RLS roles and register target datasets.
 # Finance/HR/Engineering roles are used by Superset RLS to scope rows.
-echo "[7/8] Creating group RLS roles and fct_sales dataset..."
+echo "[7/8] Creating group RLS roles and target datasets..."
 docker compose exec -T superset python -c "
 from superset.app import create_app
 app = create_app()
@@ -151,66 +228,70 @@ with app.app_context():
             print('  Role already exists: %s' % role_name)
     sa_db.session.commit()
 
-    # --- Register fct_sales as a Superset dataset (SqlaTable) ---
-    ch_db = sa_db.session.query(Database).filter_by(database_name='ClickHouse').first()
-    if not ch_db:
-        print('  ClickHouse database not found — skipping dataset creation.')
-    else:
-        try:
-            from superset.connectors.sqla.models import SqlaTable
+    db_specs = [
+        ('ClickHouse OpenInsight', 'openinsight'),
+        ('ClickHouse Engineering', 'engineering_data'),
+    ]
+    openinsight_ds = None
+    try:
+        from superset.connectors.sqla.models import SqlaTable
+        for db_name, schema_name in db_specs:
+            db = sa_db.session.query(Database).filter_by(database_name=db_name).first()
+            if not db:
+                print('  %s database not found — skipping dataset creation.' % db_name)
+                continue
             existing_ds = (
                 sa_db.session.query(SqlaTable)
-                .filter_by(table_name='fct_sales', database_id=ch_db.id)
+                .filter_by(table_name='fct_sales', database_id=db.id)
                 .first()
             )
             if existing_ds:
-                print('  Dataset fct_sales already exists (id=%d).' % existing_ds.id)
                 ds = existing_ds
+                ds.schema = schema_name
+                print('  Dataset fct_sales already exists for %s (id=%d).' % (db_name, ds.id))
             else:
                 ds = SqlaTable(
                     table_name='fct_sales',
-                    schema='openinsight',
-                    database_id=ch_db.id,
+                    schema=schema_name,
+                    database_id=db.id,
                 )
                 sa_db.session.add(ds)
                 sa_db.session.commit()
-                print('  Created dataset fct_sales (id=%d).' % ds.id)
-
-            # Sync column metadata from ClickHouse so chart queries work without manual refresh.
+                print('  Created dataset fct_sales for %s (id=%d).' % (db_name, ds.id))
             try:
                 ds.fetch_metadata()
                 sa_db.session.commit()
-                print('  Column metadata synced (%d columns).' % len(ds.columns))
+                print('  Column metadata synced for %s (%d columns).' % (db_name, len(ds.columns)))
             except Exception as sync_err:
-                print('  Column sync warning (non-fatal): %s' % sync_err)
+                print('  Column sync warning for %s (non-fatal): %s' % (db_name, sync_err))
+            if db_name == 'ClickHouse OpenInsight':
+                openinsight_ds = ds
 
-            # Grant Gamma role datasource_access on fct_sales so Gamma users
-            # (e.g. eve.viewer) can view charts/dashboards with RLS applied.
-            gamma = sa_db.session.query(Role).filter_by(name='Gamma').first()
-            if gamma and ds.perm:
-                vm = sa_db.session.query(ViewMenu).filter_by(name=ds.perm).first()
-                if vm:
-                    ds_pv = (
-                        sa_db.session.query(PermissionView)
-                        .join(Permission)
-                        .filter(Permission.name == 'datasource_access')
-                        .filter(PermissionView.view_menu_id == vm.id)
-                        .first()
-                    )
-                    if ds_pv and ds_pv not in gamma.permissions:
-                        gamma.permissions.append(ds_pv)
-                        sa_db.session.commit()
-                        print('  Granted Gamma datasource_access on %s.' % ds.perm)
-                    elif ds_pv:
-                        print('  Gamma already has datasource_access on %s.' % ds.perm)
-                    else:
-                        print('  datasource_access perm not found for %s.' % ds.perm)
+        gamma = sa_db.session.query(Role).filter_by(name='Gamma').first()
+        if gamma and openinsight_ds and openinsight_ds.perm:
+            vm = sa_db.session.query(ViewMenu).filter_by(name=openinsight_ds.perm).first()
+            if vm:
+                ds_pv = (
+                    sa_db.session.query(PermissionView)
+                    .join(Permission)
+                    .filter(Permission.name == 'datasource_access')
+                    .filter(PermissionView.view_menu_id == vm.id)
+                    .first()
+                )
+                if ds_pv and ds_pv not in gamma.permissions:
+                    gamma.permissions.append(ds_pv)
+                    sa_db.session.commit()
+                    print('  Granted Gamma datasource_access on %s.' % openinsight_ds.perm)
+                elif ds_pv:
+                    print('  Gamma already has datasource_access on %s.' % openinsight_ds.perm)
                 else:
-                    print('  ViewMenu not found for %s — Gamma grant skipped.' % ds.perm)
-            elif not gamma:
-                print('  Gamma role not found — dataset access grant skipped.')
-        except Exception as e:
-            print('  Dataset creation error: %s' % e)
+                    print('  datasource_access perm not found for %s.' % openinsight_ds.perm)
+            else:
+                print('  ViewMenu not found for %s — Gamma grant skipped.' % openinsight_ds.perm)
+        elif not gamma:
+            print('  Gamma role not found — dataset access grant skipped.')
+    except Exception as e:
+        print('  Dataset creation error: %s' % e)
 "
 
 # Create Row Level Security rules for each department group.
@@ -227,7 +308,7 @@ with app.app_context():
     from superset.models.core import Database
     from flask_appbuilder.security.sqla.models import Role
 
-    ch_db = sa_db.session.query(Database).filter_by(database_name='ClickHouse').first()
+    ch_db = sa_db.session.query(Database).filter_by(database_name='ClickHouse OpenInsight').first()
     if not ch_db:
         print('  ClickHouse not found — skipping RLS setup.')
     else:
@@ -282,12 +363,12 @@ echo ""
 echo "Test users (Keycloak SSO):"
 echo "  alice.finance    / Test123!DevOps  → Alpha + Finance_RLS (sees FIN dept rows)"
 echo "  bob.hr           / Test123!DevOps  → Alpha + HR_RLS (sees HR dept rows)"
-echo "  carol.engineering/ Test123!DevOps  → Alpha + Engineering_RLS (sees ENG dept rows)"
+echo "  carol.engineering/ Test123!DevOps  → AlphaPilot + Engineering_RLS + target-scoped DB role"
 echo "  eve.viewer       / Test123!DevOps  → Gamma + Finance_RLS (view-only, FIN rows)"
 echo "  dave.executive   / Test123!DevOps  → Admin (bypasses RLS, sees all)"
 echo ""
 echo "RLS: ROW_LEVEL_SECURITY feature flag enabled"
 echo "  fct_sales: Finance_RLS→FIN, HR_RLS→HR, Engineering_RLS→ENG"
 echo ""
-echo "DB access: Alpha role restricted to ClickHouse (all_database_access removed)"
-echo "ClickHouse datasource: registered automatically (clickhousedb+connect://clickhouse:8123/openinsight)"
+echo "DB access: Alpha role restricted to ClickHouse OpenInsight; AlphaPilot uses session-scoped DB roles"
+echo "ClickHouse datasources: ClickHouse OpenInsight and ClickHouse Engineering registered automatically"

@@ -295,6 +295,10 @@ services:
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_EXTERNAL_URL: http://localhost:${KEYCLOAK_PORT:-8080}
       KEYCLOAK_REALM: openinsight
+      SUPERSET_URL: http://localhost:${SUPERSET_PORT:-8088}
+      OI_TARGET_COOKIE_SECRET: ${OI_TARGET_COOKIE_SECRET:-changeme-openinsight-target-cookie}
+      CLICKHOUSE_SUPERSET_OPENINSIGHT_PASSWORD: ${CLICKHOUSE_SUPERSET_OPENINSIGHT_PASSWORD:-superset_openinsight_dev}
+      CLICKHOUSE_SUPERSET_ENGINEERING_PASSWORD: ${CLICKHOUSE_SUPERSET_ENGINEERING_PASSWORD:-superset_engineering_dev}
     volumes:
       - ./superset/superset_config.py:/app/pythonpath/superset_config.py
     depends_on:
@@ -308,6 +312,42 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenInsight Portal — minimal target selector in front of Superset
+  # ---------------------------------------------------------------------------
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    image: openinsight-portal:latest
+    container_name: openinsight-portal
+    profiles: ["app"]
+    ports:
+      - "${PORTAL_PORT:-8091}:8091"
+    environment:
+      PORTAL_PORT: 8091
+      PORTAL_SECRET_KEY: ${PORTAL_SECRET_KEY:-changeme-openinsight-portal-secret}
+      PORTAL_KEYCLOAK_CLIENT_ID: openinsight-portal
+      PORTAL_KEYCLOAK_CLIENT_SECRET: ${PORTAL_KEYCLOAK_CLIENT_SECRET:-portal-dev-secret}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_EXTERNAL_URL: http://localhost:${KEYCLOAK_PORT:-8080}
+      KEYCLOAK_REALM: openinsight
+      PORTAL_URL: http://localhost:${PORTAL_PORT:-8091}
+      SUPERSET_URL: http://localhost:${SUPERSET_PORT:-8088}
+      OI_TARGET_COOKIE_SECRET: ${OI_TARGET_COOKIE_SECRET:-changeme-openinsight-target-cookie}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      superset:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8091/health').read()"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
 volumes:

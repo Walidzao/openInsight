@@ -43,6 +43,21 @@
         "name": "data-engineer",
         "description": "Pipeline management, dbt, Airflow access",
         "composite": false
+      },
+      {
+        "name": "portal-pilot",
+        "description": "Access to the outer pilot portal for target selection",
+        "composite": false
+      },
+      {
+        "name": "target-openinsight",
+        "description": "May launch the default OpenInsight target in Superset",
+        "composite": false
+      },
+      {
+        "name": "target-engineering-data",
+        "description": "May launch the engineering-only ClickHouse target in Superset",
+        "composite": false
       }
     ],
     "client": {
@@ -58,6 +73,10 @@
         {
           "name": "superset-gamma",
           "description": "Superset Gamma role (dashboard viewers)"
+        },
+        {
+          "name": "superset-alpha-pilot",
+          "description": "Superset Alpha role for target-scoped pilot users"
         }
       ],
       "cube": [
@@ -485,6 +504,56 @@
       ]
     },
     {
+      "clientId": "openinsight-portal",
+      "name": "OpenInsight Portal",
+      "description": "Outer landing page that scopes the active Superset target",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "portal-dev-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "rootUrl": "http://localhost:8091",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:8091/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8091"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "openinsight-api",
       "name": "OpenInsight API",
       "description": "General API client for backend services",
@@ -636,9 +705,14 @@
       "groups": [
         "/Engineering"
       ],
+      "realmRoles": [
+        "portal-pilot",
+        "target-openinsight",
+        "target-engineering-data"
+      ],
       "clientRoles": {
         "superset": [
-          "superset-alpha"
+          "superset-alpha-pilot"
         ],
         "cube": [
           "cube-admin"

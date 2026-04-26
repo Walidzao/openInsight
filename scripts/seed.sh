@@ -24,6 +24,8 @@ CH_HOST="${CLICKHOUSE_HOST:-localhost}"
 CH_PORT="${CLICKHOUSE_HTTP_PORT:-8123}"
 CH_USER="${CLICKHOUSE_USER:-openinsight}"
 CH_PASS="${CLICKHOUSE_PASSWORD:-openinsight_dev}"
+CH_SUPERSET_OPENINSIGHT_PASS="${CLICKHOUSE_SUPERSET_OPENINSIGHT_PASSWORD:-superset_openinsight_dev}"
+CH_SUPERSET_ENGINEERING_PASS="${CLICKHOUSE_SUPERSET_ENGINEERING_PASSWORD:-superset_engineering_dev}"
 
 echo "=== OpenInsight Seed Data Loader ==="
 echo ""
@@ -70,6 +72,38 @@ while IFS= read -r stmt; do
 done < <(sed 's/--.*$//' "$SCRIPT_DIR/seed-clickhouse.sql" | tr '\n' ' ' | sed 's/;/;\n/g')
 echo "  ClickHouse seed complete"
 
+echo "  Applying ClickHouse target database DDL..."
+while IFS= read -r stmt; do
+    trimmed=$(echo "$stmt" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    if [ -n "$trimmed" ] && ! echo "$trimmed" | grep -q '^--'; then
+        curl -sf "http://${CH_HOST}:${CH_PORT}/" \
+            --user "${CH_USER}:${CH_PASS}" \
+            --data "$trimmed" || {
+            echo "  ERROR executing target DB DDL: ${trimmed:0:80}..."
+            exit 1
+        }
+    fi
+done < <(sed 's/--.*$//' "$SCRIPT_DIR/clickhouse-target-dbs.sql" | tr '\n' ' ' | sed 's/;/;\n/g')
+echo "  Target DB DDL applied."
+
+echo "  Applying ClickHouse access grants..."
+while IFS= read -r stmt; do
+    trimmed=$(echo "$stmt" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    if [ -n "$trimmed" ] && ! echo "$trimmed" | grep -q '^--'; then
+        curl -sf "http://${CH_HOST}:${CH_PORT}/" \
+            --user "${CH_USER}:${CH_PASS}" \
+            --data "$trimmed" || {
+            echo "  ERROR executing ClickHouse access DDL: ${trimmed:0:80}..."
+            exit 1
+        }
+    fi
+done < <(
+    sed "s/__OPENINSIGHT_RO_PASSWORD__/${CH_SUPERSET_OPENINSIGHT_PASS}/g; s/__ENGINEERING_RO_PASSWORD__/${CH_SUPERSET_ENGINEERING_PASS}/g" \
+        "$SCRIPT_DIR/clickhouse-access.sql" \
+    | sed 's/--.*$//' | tr '\n' ' ' | sed 's/;/;\n/g'
+)
+echo "  Access grants applied."
+
 echo "  Applying ClickHouse Kafka Engine MVs..."
 while IFS= read -r stmt; do
     trimmed=$(echo "$stmt" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
@@ -94,10 +128,18 @@ CH_SALES=$(curl -sf "http://${CH_HOST}:${CH_PORT}/" \
 CH_EVENTS=$(curl -sf "http://${CH_HOST}:${CH_PORT}/" \
     --user "${CH_USER}:${CH_PASS}" \
     --data "SELECT count() FROM openinsight.fct_events" 2>/dev/null | tr -d ' ')
+CH_ENG_SALES=$(curl -sf "http://${CH_HOST}:${CH_PORT}/" \
+    --user "${CH_USER}:${CH_PASS}" \
+    --data "SELECT count() FROM engineering_data.fct_sales" 2>/dev/null | tr -d ' ')
+CH_ENG_EVENTS=$(curl -sf "http://${CH_HOST}:${CH_PORT}/" \
+    --user "${CH_USER}:${CH_PASS}" \
+    --data "SELECT count() FROM engineering_data.fct_events" 2>/dev/null | tr -d ' ')
 
 echo "  PostgreSQL customers: ${PG_COUNT:-0} rows"
 echo "  ClickHouse fct_sales: ${CH_SALES:-0} rows"
 echo "  ClickHouse fct_events: ${CH_EVENTS:-0} rows"
+echo "  Engineering fct_sales: ${CH_ENG_SALES:-0} rows"
+echo "  Engineering fct_events: ${CH_ENG_EVENTS:-0} rows"
 
 echo ""
 echo "=== Seed complete ==="
